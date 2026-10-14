@@ -1,0 +1,24 @@
+{
+  "name": "passgate",
+  "version": "1.0.0",
+  "description": "PassGate — mDL (mobile driver's license) check-in kiosk demo powered by the CredenceID Cloud SDK",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js"
+  },
+  "keywords": [
+    "mdl",
+    "identity",
+    "kiosk",
+    "credenceid"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "uuid": "^11.1.0"
+  }
+}

@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PassGate · mDL Digital Identity & Age Verification Suite</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Ambient background lighting -->
+  <div class="bg-gradient-orb bg-orb-1"></div>
+  <div class="bg-gradient-orb bg-orb-2"></div>
+  <div class="bg-grid-overlay"></div>
+
+  <div id="app" class="checkout-app">
+
+    <!-- Top Navigation Bar -->
+    <header class="app-nav">
+      <div class="nav-brand">
+        <span class="brand-badge">🛡️</span>
+        <div class="brand-text">
+          <span class="brand-name">Pass<span class="brand-accent">Gate</span></span>
+          <span class="brand-tag">mDL Digital ID &amp; Age Verification</span>
+        </div>
+      </div>
+      <div class="nav-security">
+        <span class="security-pill">
+          <span class="security-dot"></span>
+          <span class="security-label">ISO/IEC 18013-5 mdoc · OpenID4VP</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- Multi-Scenario Application Tabs Navigation -->
+    <nav class="demo-tabs-container" aria-label="Demo Application Scenarios">
+      <div class="demo-tabs-nav" id="demo-tabs-nav">
+        <button type="button" class="tab-btn active" data-tab="qr">
+          <span class="tab-icon">📱</span>
+          <span class="tab-text">Scan QR Code</span>
+          <span class="tab-pill" style="background:rgba(56,189,248,0.18);color:#7dd3fc;border:1px solid rgba(56,189,248,0.35);">Main</span>
+        </button>
+        <button type="button" class="tab-btn" data-tab="verify">
+          <span class="tab-icon">🛡️</span>
+          <span class="tab-text">Age Check (Door &amp; Bar)</span>
+          <span class="tab-pill" style="background:rgba(16,185,129,0.18);color:#6ee7b7;border:1px solid rgba(16,185,129,0.35);">21+ Terminal</span>
+        </button>
+        <button type="button" class="tab-btn" data-tab="menu">
+          <span class="tab-icon">🍸</span>
+          <span class="tab-text">Menu Ordering (Table #12)</span>
+          <span class="tab-pill age-pill">Age-Gated</span>
+        </button>
+      </div>
+    </nav>
+
+    <main class="main-content">
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- MOBILE PATRON PRESENTATION VIEW (Active when scanning QR with phone)-->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div id="mobile-patron-panel" class="mobile-patron-panel" style="display:none;">
+        <div class="checkout-card single-focus-card" style="max-width:480px;margin:1rem auto;padding:2rem 1.75rem;text-align:center;">
+          
+          <div class="card-badge" style="background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3);margin-bottom:0.75rem;">
+            Patron Digital ID Presentation
+          </div>
+
+          <div style="font-size:2.8rem;margin-bottom:0.5rem;">🪪</div>
+          <h2 style="font-size:1.4rem;font-weight:800;color:#fff;margin-bottom:0.35rem;">Age Verification Requested</h2>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1.25rem;">
+            The terminal is requesting proof that you are <strong style="color:#fff;">21 years of age or older</strong> to access alcoholic beverages.
+          </p>
+
+          <!-- Privacy guarantee banner -->
+          <div class="policy-alert" style="margin-bottom:1.5rem;text-align:left;background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.25);">
+            <span class="alert-icon">🔒</span>
+            <div class="alert-content">
+              <strong style="color:#6ee7b7;">Privacy-Preserving Verification</strong>
+              <p style="font-size:0.75rem;color:#a7f3d0;">Only your Age Over 21 claim and photo are verified. Your street address, license number, and exact DOB remain completely private.</p>
+            </div>
+          </div>
+
+          <!-- PRIMARY ACTION: Real Apple Wallet Verification -->
+          <div class="wallet-cta-group" style="margin-bottom:1.25rem;">
+            <button type="button" id="btn-mobile-apple-wallet" class="btn-wallet-primary" style="padding:1.1rem 1.25rem;">
+              <div class="wallet-icons-badge">
+                <span class="apple-logo">🪪</span>
+              </div>
+              <div class="btn-wallet-text">
+                <span class="btn-wallet-heading">Present ID with Apple Wallet</span>
+                <span class="btn-wallet-subheading">Double-click side button to share via Face ID</span>
+              </div>
+              <span class="btn-wallet-arrow">➔</span>
+            </button>
+          </div>
+
+          <!-- Live Status Feedback during Apple Wallet Presentation -->
+          <div id="mobile-wallet-status-box" style="margin-bottom:1.25rem;padding:0.85rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);font-size:0.82rem;display:flex;align-items:center;justify-content:center;gap:0.6rem;">
+            <span class="pulse-dot" id="mobile-wallet-status-dot"></span>
+            <span id="mobile-wallet-status-text" style="color:var(--text-muted);">Ready to present with Apple Wallet</span>
+          </div>
+
+          <!-- Outcome View (shown when completed) -->
+          <div id="mobile-outcome-box" style="display:none;padding:1.25rem;border-radius:14px;margin-bottom:1.25rem;text-align:center;">
+            <div id="mobile-outcome-icon" style="font-size:2.5rem;margin-bottom:0.4rem;">✓</div>
+            <div id="mobile-outcome-title" style="font-size:1.15rem;font-weight:800;margin-bottom:0.25rem;">Age Verified (21+)</div>
+            <p id="mobile-outcome-desc" style="font-size:0.8rem;margin-bottom:0.75rem;">Your digital ID was verified. The terminal screen has been updated.</p>
+            <div id="mobile-outcome-badge" class="trust-badge valid" style="justify-content:center;">✓ Verified via Apple Wallet</div>
+          </div>
+
+          <!-- Clearly Isolated Test Profile Spoof Personas (for demo convenience) -->
+          <div style="margin-top:1.25rem;padding:1rem;background:rgba(15,23,42,0.6);border-radius:14px;border:1px solid rgba(255,255,255,0.07);text-align:left;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+              <span style="font-size:0.72rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.04em;">⚡ Demo Test Personas (Spoof):</span>
+              <span style="font-size:0.68rem;color:#64748b;">Presentation Only</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;">
+              <button type="button" class="btn-sim pass" data-action="mobile-spoof" data-scenario="adult_verified" style="font-size:0.75rem;padding:0.5rem 0.6rem;">
+                🟢 Adult (28) ➔ Allow
+              </button>
+              <button type="button" class="btn-sim pass" data-action="mobile-spoof" data-scenario="passport_adult_verified" style="font-size:0.75rem;padding:0.5rem 0.6rem;">
+                📘 Passport (28) ➔ Allow
+              </button>
+              <button type="button" class="btn-sim fail" data-action="mobile-spoof" data-scenario="underage_minor" style="font-size:0.75rem;padding:0.5rem 0.6rem;">
+                👶 Minor (17) ➔ Block
+              </button>
+              <button type="button" class="btn-sim fail" data-action="mobile-spoof" data-scenario="expired_document" style="font-size:0.75rem;padding:0.5rem 0.6rem;">
+                📅 Expired ID ➔ Block
+              </button>
+            </div>
+          </div>
+
+          <!-- Optional toggle to terminal mode -->
+          <div style="margin-top:1.25rem;text-align:center;">
+            <button type="button" id="btn-toggle-terminal-mode" class="btn-text-action" style="font-size:0.78rem;color:#64748b;">
+              🖥️ Switch to Full Terminal View
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- TAB 1: SCAN QR CODE / CONNECT DIGITAL WALLET (MAIN LANDING PAGE)    -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div id="tab-panel-qr" class="tab-panel active">
+        
+        <!-- Scenario Banner -->
+        <div class="scenario-header-banner">
+          <div class="scenario-header-titles">
+            <h2><span>📱</span> Connect Digital Wallet · Presentation QR Code</h2>
+            <p>Scan with any smartphone camera or ISO 18013-5 wallet app to start a secure, cryptographically verified session.</p>
+          </div>
+          <div class="scenario-badge-pill" style="background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.35);">
+            <span>CUSTOMER SCAN SCREEN</span>
+          </div>
+        </div>
+
+        <!-- Dedicated Single QR Code Card (Only QR Code & Link) -->
+        <div class="checkout-card single-focus-card" style="max-width: 490px; margin: 1.5rem auto; text-align: center; padding: 2.2rem 2rem;">
+          <div class="companion-header" style="justify-content: center; margin-bottom: 1.25rem;">
+            <span class="companion-icon" style="font-size: 2rem;">📱</span>
+            <div class="companion-titles" style="text-align: center;">
+              <h3 style="font-size: 1.35rem; font-weight: 800; color: #fff;">Customer Scan Terminal</h3>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Point smartphone camera to connect &amp; present digital ID</p>
+            </div>
+          </div>
+
+          <div class="qr-presentation" style="margin: 1.25rem auto;">
+            <div id="qr-container" class="qr-box" style="margin: 0 auto; box-shadow: 0 10px 30px rgba(56,189,248,0.2);">
+              <!-- QR rendered dynamically with mobile web URL -->
+            </div>
+            <div class="qr-camera-guide" style="margin-top: 1rem;">
+              <span class="camera-icon">📷</span>
+              <span>Point smartphone camera to verify mDL</span>
+            </div>
+          </div>
+
+          <div class="handoff-url-badge" style="margin-top: 1.25rem;">
+            <span class="badge-tag">MOBILE LINK</span>
+            <input type="text" id="mobile-url-display" class="url-input" readonly value="Generating mobile web link…" />
+            <button type="button" id="btn-copy-mobile-url" class="btn-copy-sm" title="Copy link">📋</button>
+          </div>
+
+          <!-- Live Session Status Bar -->
+          <div class="session-status-row" style="margin-top: 1rem; justify-content: space-between;">
+            <div class="status-indicator">
+              <span class="pulse-dot"></span>
+              <span id="awaiting-status">Session active · Waiting for customer scan</span>
+            </div>
+            <button type="button" id="btn-refresh-session" class="btn-text-action" title="Generate fresh session">↺ Reset</button>
+          </div>
+
+          <!-- CredenceID iOS Verifier (Tap2iD) Action Button & QR -->
+          <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.06);">
+            <button type="button" id="btn-toggle-credence-ios" class="btn-wallet-fallback" style="border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.06);color:#93c5fd;font-size:0.8rem;" title="Show ISO 18013-5 mdoc QR for CredenceID Tap2iD iOS Verifier app">
+              <span class="fallback-badge">📱</span>
+              <span class="fallback-text">CredenceID iOS Verifier (Tap2iD) QR</span>
+            </button>
+
+            <!-- CredenceID iOS Verifier QR Panel -->
+            <div id="credence-ios-qr-panel" style="display:none;margin-top:1rem;padding:1rem;background:rgba(15,23,42,0.6);border-radius:12px;border:1px solid rgba(59,130,246,0.2);text-align:center;">
+              <div style="font-weight:600;font-size:0.85rem;color:#e2e8f0;margin-bottom:0.25rem;">CredenceID iOS Verifier (Tap2iD) Engagement</div>
+              <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:0.75rem;">Scan with Tap2iD Mobile app on iPhone or tap via NFC</div>
+              <div id="credence-ios-qr-container" style="display:flex;justify-content:center;margin:0.5rem 0;"></div>
+              <div style="font-size:0.7rem;color:#64748b;word-break:break-all;margin-top:0.5rem;" id="credence-ios-uri-text"></div>
+            </div>
+          </div>
+
+          <!-- Developer / Payload Inspector Toggle -->
+          <div class="developer-drawer-wrapper" style="margin-top: 1rem;">
+            <button type="button" id="btn-toggle-payload" class="btn-drawer-toggle">
+              <span>🔍 Inspect OpenID4VP Payload</span>
+            </button>
+            <div id="payload-drawer" class="payload-drawer hidden">
+              <div class="payload-drawer__header">
+                <span id="payload-protocol-label" class="protocol-chip">OpenID4VP Web Flow</span>
+                <button type="button" id="btn-copy-payload" class="btn-copy-sm">Copy</button>
+              </div>
+              <textarea id="raw-payload-box" class="raw-box" readonly spellcheck="false"></textarea>
+              <div id="copy-toast" class="copy-toast hidden">✓ Copied to clipboard!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- TAB 2: AGE CHECK (DOOR & BAR ID CHECK FOR ALCOHOL ACCESS)           -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div id="tab-panel-verify" class="tab-panel">
+        
+        <!-- Scenario Banner -->
+        <div class="scenario-header-banner">
+          <div class="scenario-header-titles">
+            <h2><span>🛡️</span> Door &amp; Bar ID Check · 21+ Alcohol Access Terminal</h2>
+            <p>Fast entrance and bartender age verification station. Confirms in &lt;1s whether a customer can access alcohol or enter a 21+ establishment.</p>
+          </div>
+          <div class="scenario-badge-pill">
+            <span>DOOR &amp; BAR ID TERMINAL</span>
+          </div>
+        </div>
+
+        <!-- ── STATE: AWAITING VERIFICATION ─────────────────────────────── -->
+        <section id="state-awaiting" class="view-state active">
+          <div class="checkout-card single-focus-card" style="max-width:720px;text-align:left;padding:2.2rem 2.2rem;">
+            <div class="card-badge" style="background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.3);">
+              Bouncer &amp; Bartender Kiosk
+            </div>
+            <h1 class="card-title" style="margin-top:0.4rem;font-size:1.65rem;">Legal Drinking Age (21+) Verification Terminal</h1>
+            <p class="card-subtitle">Enforcing age 21+ verification for alcohol service and 21+ venue entry. Authenticates cryptographically verified mDL / passport credentials in &lt;1s.</p>
+
+            <div class="policy-alert" style="margin:1.25rem 0;">
+              <span class="alert-icon">🔞</span>
+              <div class="alert-content">
+                <strong>Strict 21+ Alcohol Policy</strong>
+                <p>Cryptographically verifies legal drinking age without exposing home address or full driver's license number.</p>
+              </div>
+            </div>
+
+            <!-- Primary Verification Button & Simulate Button on Age Check page -->
+            <div class="wallet-cta-group" style="margin: 1.5rem 0 0.75rem;">
+              <button type="button" id="btn-wallet-redirect" class="btn-wallet-primary">
+                <div class="wallet-icons-badge">
+                  <span class="apple-logo">🪪</span>
+                </div>
+                <div class="btn-wallet-text">
+                  <span class="btn-wallet-heading">Verify Customer ID</span>
+                  <span class="btn-wallet-subheading">Request ISO/IEC 18013-5 mdoc · 21+ Age Check</span>
+                </div>
+                <span class="btn-wallet-arrow">➔</span>
+              </button>
+
+              <button type="button" id="btn-simulate-mobile" class="btn-wallet-fallback" style="margin-top:0.6rem;" title="Simulate mobile wallet presentation without deep link">
+                <span class="fallback-badge">⚡</span>
+                <span class="fallback-text">Simulate Customer Presentation (Demo Fallback)</span>
+              </button>
+            </div>
+
+            <!-- Terminal Wallet Feedback / Alert message -->
+            <div id="terminal-wallet-feedback" style="display:none;margin-bottom:1rem;padding:0.75rem 0.9rem;border-radius:10px;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);font-size:0.78rem;color:#7dd3fc;line-height:1.4;">
+            </div>
+
+            <!-- Quick Demo Spoof Controller for Bouncers / Bartenders -->
+            <div style="margin:1.4rem 0;padding:1.1rem;background:rgba(255,255,255,0.03);border-radius:14px;border:1px solid rgba(255,255,255,0.08);">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+                <span style="font-size:0.75rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">⚡ Test Customer ID Scenarios (1-Click Decision):</span>
+                <span style="font-size:0.72rem;color:#64748b;">Instant Terminal Test</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));gap:0.6rem;">
+                <button type="button" class="btn-sim pass" data-action="direct-spoof" data-scenario="adult_verified" style="padding:0.7rem 0.85rem;font-size:0.82rem;display:flex;align-items:center;justify-content:space-between;" title="Radu R. (Age 28, CA DMV)">
+                  <span>🟢 Adult (Age 28, CA DMV)</span>
+                  <span style="font-weight:800;color:#34d399;">ALLOW ➔</span>
+                </button>
+                <button type="button" class="btn-sim pass" data-action="direct-spoof" data-scenario="passport_adult_verified" style="padding:0.7rem 0.85rem;font-size:0.82rem;display:flex;align-items:center;justify-content:space-between;" title="Sophia C. (Age 28, US Digital Passport)">
+                  <span>📘 Passport (Age 28)</span>
+                  <span style="font-weight:800;color:#34d399;">ALLOW ➔</span>
+                </button>
+                <button type="button" class="btn-sim fail" data-action="direct-spoof" data-scenario="underage_minor" style="padding:0.7rem 0.85rem;font-size:0.82rem;display:flex;align-items:center;justify-content:space-between;" title="Lucas M. (Age 17, CA DMV)">
+                  <span>👶 Minor (Age 17, CA DMV)</span>
+                  <span style="font-weight:800;color:#f87171;">BLOCK ➔</span>
+                </button>
+                <button type="button" class="btn-sim fail" data-action="direct-spoof" data-scenario="expired_document" style="padding:0.7rem 0.85rem;font-size:0.82rem;display:flex;align-items:center;justify-content:space-between;" title="Elena V. (Expired License)">
+                  <span>📅 Expired ID (Age 36)</span>
+                  <span style="font-weight:800;color:#f87171;">BLOCK ➔</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal Actions & Status Row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.06);flex-wrap:wrap;gap:0.75rem;">
+              <div class="status-indicator">
+                <span class="pulse-dot"></span>
+                <span id="terminal-awaiting-status">Terminal Ready · Waiting for patron presentation or verify action</span>
+              </div>
+              <button type="button" id="btn-switch-to-qr" class="btn-text-action" style="font-size:0.82rem;color:#38bdf8;padding:0.4rem 0.75rem;background:rgba(56,189,248,0.1);border-radius:8px;border:1px solid rgba(56,189,248,0.25);cursor:pointer;">
+                📱 View Customer QR Code on Main Page ➔
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── STATE: VERIFYING PROOF ────────────────────────────────────── -->
+        <section id="state-verifying" class="view-state">
+          <div class="checkout-card single-focus-card">
+            <div class="verifying-animation">
+              <div class="radar-spinner"></div>
+              <div class="wallet-badge-center">📱</div>
+            </div>
+            <h2 class="card-title">Checking Customer Credential…</h2>
+            <p class="card-subtitle">Evaluating cryptographic proof and enforcing legal drinking age (21+)…</p>
+
+            <div class="eval-steps">
+              <div class="eval-step active">
+                <span class="step-check">✓</span>
+                <span>OpenID4VP Web Handshake Established</span>
+              </div>
+              <div class="eval-step active">
+                <span class="step-check">⚡</span>
+                <span>Validating State DMV Issuer Trust Root</span>
+              </div>
+              <div class="eval-step">
+                <span class="step-check">○</span>
+                <span>Enforcing Legal Age Threshold (≥ 21)</span>
+              </div>
+            </div>
+
+            <button type="button" id="btn-cancel-verifying" class="btn-cancel">Cancel Verification</button>
+          </div>
+        </section>
+
+        <!-- ── STATE: ACCESS GRANTED / ALLOWED TO ACCESS ALCOHOL ─────────── -->
+        <section id="state-granted" class="view-state">
+          <div class="checkout-card single-focus-card result-card-granted">
+            
+            <!-- High-Contrast Decision Banner for Bouncer / Bartender -->
+            <div class="alcohol-access-banner allowed">
+              <div class="access-banner-left">
+                <span class="access-banner-icon">🍺</span>
+                <div>
+                  <div class="access-banner-title">ALLOWED TO ACCESS ALCOHOL</div>
+                  <div class="access-banner-sub">Legal Drinking Age 21+ Confirmed via Cryptographic mDoc</div>
+                </div>
+              </div>
+              <div class="access-status-badge">ACCESS APPROVED</div>
+            </div>
+
+            <h2 class="result-headline" style="font-size:1.35rem;">Customer Verified · Legal Age (21+) Confirmed</h2>
+            <p class="result-subtext">Cryptographic identity proof authentic. Issuer trust anchor validated.</p>
+
+            <!-- Tail-End Visual Identity Match / ID Portrait Verification Container -->
+            <div id="visual-match-container" class="visual-match-card" style="display: none;">
+              <div class="visual-match-header">
+                <span class="visual-match-badge">👁️ Bouncer / Bartender Face Check</span>
+                <span class="visual-match-sub">Confirm patron matches verified portrait</span>
+              </div>
+
+              <!-- Active Portrait Panel -->
+              <div id="portrait-active-panel" class="visual-match-body">
+                <div class="portrait-frame">
+                  <img id="granted-portrait-img" src="" alt="Verified ID Portrait" class="portrait-img" />
+                  <div class="portrait-verified-tag">
+                    <span class="verified-icon">🔒</span>
+                    <span>Cryptographic mDoc</span>
+                  </div>
+                </div>
+                <div class="portrait-info">
+                  <div class="portrait-meta-row">
+                    <span class="meta-label">Customer:</span>
+                    <strong id="portrait-subject-name">—</strong>
+                  </div>
+                  <div class="portrait-meta-row">
+                    <span class="meta-label">Document:</span>
+                    <span id="portrait-doc-type">—</span>
+                  </div>
+                  <div class="portrait-tip">
+                    <span class="tip-icon">🛡️</span>
+                    <span><strong>Visual Check:</strong> Confirm this photo matches the person standing at the door or bar.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Privacy Indicator -->
+              <div id="portrait-privacy-note" class="portrait-privacy-notice" style="display: none;">
+                <span class="privacy-icon">🔒</span>
+                <span><strong>Identity Verified via Cryptographic Trust Anchor:</strong> Age attribute authenticated. Portrait omitted by wallet policy for selective disclosure.</span>
+              </div>
+            </div>
+
+            <!-- Verified Identity Details -->
+            <div class="attributes-panel" id="granted-details"></div>
+
+            <!-- Cryptographic Trust Flags -->
+            <div class="trust-container" id="trust-badges"></div>
+
+            <button type="button" id="btn-reset-granted" class="btn-brand-primary" style="margin-top:1.5rem;font-size:1rem;padding:0.95rem;">
+              ⚡ Check Next Customer
+            </button>
+          </div>
+        </section>
+
+        <!-- ── STATE: ACCESS DENIED / CANNOT ACCESS ALCOHOL ──────────────── -->
+        <section id="state-denied" class="view-state">
+          <div class="checkout-card single-focus-card result-card-denied">
+            
+            <!-- High-Contrast Blocked Banner for Bouncer / Bartender -->
+            <div class="alcohol-access-banner blocked">
+              <div class="access-banner-left">
+                <span class="access-banner-icon">⛔</span>
+                <div>
+                  <div class="access-banner-title">BLOCKED · CANNOT ACCESS ALCOHOL</div>
+                  <div class="access-banner-sub" id="denied-banner-sub">Customer does not meet legal drinking age requirement (21+)</div>
+                </div>
+              </div>
+              <div class="access-status-badge">ACCESS BLOCKED</div>
+            </div>
+
+            <h2 class="result-headline" style="font-size:1.35rem;">Access Denied · Age Policy Not Satisfied</h2>
+            <p class="denied-reason-text" id="denied-reason">Underage: Customer does not meet the minimum age requirement of 21.</p>
+
+            <!-- Denied Details -->
+            <div class="attributes-panel" id="denied-details"></div>
+            <div class="trust-container" id="denied-badges"></div>
+
+            <button type="button" id="btn-reset-denied" class="btn-brand-primary" style="margin-top:1.5rem;font-size:1rem;padding:0.95rem;">
+              ⚡ Check Next Customer
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- TAB 3: MOBILE TABLE ORDERING (PHONE ORDERING AT RESTAURANT)        -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div id="tab-panel-menu" class="tab-panel">
+        
+        <!-- Scenario Banner -->
+        <div class="scenario-header-banner">
+          <div class="scenario-header-titles">
+            <h2><span>📱</span> The Copper &amp; Cask Lounge · Mobile Table Ordering</h2>
+            <p>Order food and craft beverages directly from your phone at your table. Digital ID check skips waiting for a physical card inspection!</p>
+          </div>
+          <div class="scenario-badge-pill" style="background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.35);">
+            <span>TABLE #12</span>
+          </div>
+        </div>
+
+        <div class="menu-ordering-layout">
+
+          <!-- Left Column: Menu Catalog -->
+          <div class="menu-catalog-card">
+
+            <!-- Category 1: 21+ Craft Spirits & Cocktails -->
+            <div class="menu-category-section">
+              <div class="menu-category-title-row">
+                <h3 class="menu-category-title">
+                  <span>🍸</span> Craft Spirits &amp; Brews
+                </h3>
+                <span class="menu-category-badge restricted">🔞 Age 21+ Required</span>
+              </div>
+
+              <div class="menu-items-grid">
+                <!-- Item 1: Reserve Single Malt -->
+                <div class="menu-item-card is-21" data-id="single-malt" data-name="Reserve Single Malt Whiskey" data-price="18.00" data-age="21" data-icon="🥃">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🥃</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Reserve Single Malt</div>
+                      <span class="menu-item-tag tag-21">Age 21+ Required</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Aged 12 years in sherry oak casks. Peaty, rich finish.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$18.00</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="single-malt">+ Add</button>
+                  </div>
+                </div>
+
+                <!-- Item 2: Smoked Old Fashioned -->
+                <div class="menu-item-card is-21" data-id="old-fashioned" data-name="Smoked Old Fashioned" data-price="16.50" data-age="21" data-icon="🍹">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🍹</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Smoked Old Fashioned</div>
+                      <span class="menu-item-tag tag-21">Age 21+ Required</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Rye bourbon, Angostura bitters, orange peel, charred oak.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$16.50</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="old-fashioned">+ Add</button>
+                  </div>
+                </div>
+
+                <!-- Item 3: Napa Cabernet Sauvignon -->
+                <div class="menu-item-card is-21" data-id="napa-cab" data-name="Napa Valley Cabernet 2021" data-price="17.00" data-age="21" data-icon="🍷">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🍷</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Napa Valley Cabernet</div>
+                      <span class="menu-item-tag tag-21">Age 21+ Required</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Full-bodied vintage, blackberry, cedar, and velvety tannins.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$17.00</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="napa-cab">+ Add</button>
+                  </div>
+                </div>
+
+                <!-- Item 4: West Coast Hazy IPA -->
+                <div class="menu-item-card is-21" data-id="hazy-ipa" data-name="West Coast Hazy IPA Pint" data-price="9.50" data-age="21" data-icon="🍺">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🍺</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Hazy IPA Draft Pint</div>
+                      <span class="menu-item-tag tag-21">Age 21+ Required</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Citra &amp; Mosaic hops, fresh tropical citrus, 6.8% ABV.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$9.50</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="hazy-ipa">+ Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category 2: Gourmet Kitchen (All Ages) -->
+            <div class="menu-category-section">
+              <div class="menu-category-title-row">
+                <h3 class="menu-category-title">
+                  <span>🍔</span> Gourmet Fare &amp; Kitchen
+                </h3>
+                <span class="menu-category-badge all-ages">🌱 All Ages · No ID Needed</span>
+              </div>
+
+              <div class="menu-items-grid">
+                <!-- Item 5: Wagyu Smash Burger -->
+                <div class="menu-item-card" data-id="wagyu-burger" data-name="Dry-Aged Wagyu Smash Burger" data-price="17.50" data-age="0" data-icon="🍔">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🍔</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Wagyu Smash Burger</div>
+                      <span class="menu-item-tag tag-all">All Ages</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Double wagyu patties, aged cheddar, caramelized onion, brioche.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$17.50</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="wagyu-burger">+ Add</button>
+                  </div>
+                </div>
+
+                <!-- Item 6: Truffle Fries -->
+                <div class="menu-item-card" data-id="truffle-fries" data-name="Crispy Truffle Parmesan Fries" data-price="8.50" data-age="0" data-icon="🍟">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🍟</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Truffle Parmesan Fries</div>
+                      <span class="menu-item-tag tag-all">All Ages</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Hand-cut russet potatoes, white truffle oil, pecorino, herbs.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$8.50</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="truffle-fries">+ Add</button>
+                  </div>
+                </div>
+
+                <!-- Item 7: Street Tacos -->
+                <div class="menu-item-card" data-id="street-tacos" data-name="Fire-Roasted Street Tacos (3)" data-price="14.00" data-age="0" data-icon="🌮">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🌮</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Fire-Roasted Tacos</div>
+                      <span class="menu-item-tag tag-all">All Ages</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Slow-braised carnitas, avocado salsa verde, cotija, lime.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$14.00</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="street-tacos">+ Add</button>
+                  </div>
+                </div>
+
+                <!-- Item 8: Artisan Botanical Spritz -->
+                <div class="menu-item-card" data-id="botanical-spritz" data-name="Blood Orange Botanical Spritz" data-price="6.50" data-age="0" data-icon="🥤">
+                  <div class="menu-item-top">
+                    <div class="menu-item-icon">🥤</div>
+                    <div class="menu-item-meta">
+                      <div class="menu-item-title">Blood Orange Spritz</div>
+                      <span class="menu-item-tag tag-all">Zero-Proof · All Ages</span>
+                    </div>
+                  </div>
+                  <p class="menu-item-desc">Wild blood orange, rosemary botanical infusion, sparkling tonic.</p>
+                  <div class="menu-item-bottom">
+                    <span class="menu-item-price">$6.50</span>
+                    <button type="button" class="btn-add-item" data-action="add-item" data-id="botanical-spritz">+ Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right Column: Cart & Age Check Summary -->
+          <div class="menu-cart-card">
+            <div class="cart-header-row">
+              <h3 class="cart-header-title">
+                <span>🛒</span> Table #12 Order
+                <span class="cart-count-badge" id="menu-cart-count">0 items</span>
+              </h3>
+              <button type="button" class="btn-clear-cart" id="btn-clear-menu-cart">Clear All</button>
+            </div>
+
+            <!-- Quick 1-Click Demo Scenarios for Presenters -->
+            <div class="menu-demo-presets-card">
+              <div class="demo-presets-title">
+                <span>⚡</span> One-Click Presentation Presets:
+              </div>
+              <div class="demo-presets-buttons">
+                <button type="button" class="btn-demo-preset preset-adult" id="btn-preset-menu-adult">
+                  <span>🍸 Load 21+ Cocktails (Order Goes Through)</span>
+                  <span style="font-size:0.7rem;opacity:0.8;">🟢 Apple Wallet Verified</span>
+                </button>
+                <button type="button" class="btn-demo-preset preset-minor" id="btn-preset-menu-minor">
+                  <span>👶 Load 21+ Drinks (Issue With Order)</span>
+                  <span style="font-size:0.7rem;opacity:0.8;">⚠️ Verification Issue</span>
+                </button>
+                <button type="button" class="btn-demo-preset preset-food" id="btn-preset-menu-food">
+                  <span>🍔 Load Food Only (Instant Checkout)</span>
+                  <span style="font-size:0.7rem;opacity:0.8;">⚡ No ID Needed</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Cart Items Container -->
+            <div class="cart-items-container" id="menu-cart-items">
+              <div class="cart-empty-message">Your order is empty.<br>Tap "+ Add" on any menu item above.</div>
+            </div>
+
+            <!-- Dynamic Age Restriction Alert Banner -->
+            <div class="age-restriction-cart-alert all-ages-only" id="menu-cart-age-alert">
+              <span class="alert-icon">🌱</span>
+              <div class="alert-text" id="menu-cart-age-text">
+                <strong>All-Ages Order</strong>
+                <p>No alcohol in your cart. Instant standard order placement ready.</p>
+              </div>
+            </div>
+
+            <!-- Cart Totals Summary -->
+            <div class="cart-summary-box">
+              <div class="cart-summary-line">
+                <span>Subtotal</span>
+                <span id="menu-cart-subtotal">$0.00</span>
+              </div>
+              <div class="cart-summary-line">
+                <span>Sales Tax (8.5%)</span>
+                <span id="menu-cart-tax">$0.00</span>
+              </div>
+              <div class="cart-summary-line total-line">
+                <span>Total</span>
+                <span class="price" id="menu-cart-total">$0.00</span>
+              </div>
+            </div>
+
+            <!-- Place Order Button -->
+            <button type="button" class="btn-checkout-order" id="btn-checkout-menu-order" disabled>
+              <span>Place Order</span>
+              <span>➔</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Menu Checkout / Verification Modal -->
+        <div class="menu-modal-overlay" id="menu-checkout-modal">
+          <div class="menu-modal-card">
+            <button type="button" class="modal-close-btn" id="btn-close-menu-modal" title="Close">✕</button>
+
+            <!-- Modal Step 1: Age Verification Gate (when 21+ items present) -->
+            <div id="modal-view-gate" style="display:block;">
+              <div class="table-pill-header">
+                <span>🍽️ Table #12 Order</span>
+              </div>
+              <h2 style="font-size:1.3rem;font-weight:700;color:#fff;margin:0.25rem 0 0.25rem;">Age Verification Required</h2>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">Your order contains alcoholic beverages. Choose how you would like to verify legal age (21+):</p>
+
+              <!-- Order Summary Snippet -->
+              <div id="modal-order-summary-snippet" style="background:rgba(0,0,0,0.3);padding:0.75rem 1rem;border-radius:12px;margin-bottom:1rem;font-size:0.82rem;border:1px solid rgba(255,255,255,0.06);"></div>
+
+              <!-- Two ID Verification Options (Tabs) -->
+              <div class="id-options-tabs">
+                <button type="button" class="id-option-tab-btn active" id="tab-opt-digital">
+                  <div class="id-tab-title">
+                    <span>📱 Digital ID (Instant)</span>
+                    <span class="id-tab-badge badge-instant">Skip Server Check</span>
+                  </div>
+                  <span class="id-tab-sub">Verify cryptographically with phone wallet. Zero physical card inspection at table!</span>
+                </button>
+                <button type="button" class="id-option-tab-btn is-physical" id="tab-opt-physical">
+                  <div class="id-tab-title">
+                    <span>🪪 Physical ID at Table</span>
+                    <span class="id-tab-badge badge-server">Server Check</span>
+                  </div>
+                  <span class="id-tab-sub">Prefer physical ID? Server will inspect physical card upon drink delivery.</span>
+                </button>
+              </div>
+
+              <!-- Option 1 Container: Digital ID Flow (Active by default) -->
+              <div id="panel-opt-digital" style="display:block;">
+                
+                <!-- Primary Apple Wallet Verification Button (Identical to Age Check) -->
+                <div class="wallet-cta-group" style="margin: 0.75rem 0 0.5rem;">
+                  <button type="button" id="btn-menu-apple-wallet" class="btn-wallet-primary">
+                    <div class="wallet-icons-badge">
+                      <span class="apple-logo">🪪</span>
+                    </div>
+                    <div class="btn-wallet-text">
+                      <span class="btn-wallet-heading">Verify with Apple Wallet</span>
+                      <span class="btn-wallet-subheading">Mobile Driver's License · Age Verification</span>
+                    </div>
+                    <span class="btn-wallet-arrow">➔</span>
+                  </button>
+
+                  <button type="button" id="btn-menu-simulate-wallet" class="btn-wallet-fallback" style="margin-top:0.5rem;" title="Simulate wallet approval">
+                    <span class="fallback-badge">⚡</span>
+                    <span class="fallback-text">Simulate Apple Wallet Approval (Demo Fallback)</span>
+                  </button>
+                </div>
+
+                <!-- Menu Wallet Feedback / Alert message -->
+                <div id="menu-wallet-feedback" style="display:none;margin-bottom:0.75rem;padding:0.65rem 0.85rem;border-radius:10px;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);font-size:0.75rem;color:#7dd3fc;line-height:1.4;">
+                </div>
+
+                <!-- One-Click Demo Personas for Presenting (Order Goes Through vs Issue With Order) -->
+                <div style="padding:0.75rem 0.9rem;background:rgba(15,23,42,0.6);border-radius:12px;border:1px solid rgba(255,255,255,0.08);margin-bottom:0.85rem;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                    <span style="font-size:0.7rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">One-Click Demo Test Personas:</span>
+                    <span style="font-size:0.68rem;color:#64748b;">Instant Simulation</span>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;">
+                    <button type="button" class="btn-sim pass" data-action="menu-spoof" data-scenario="adult_verified" style="width:100%;font-size:0.78rem;padding:0.45rem 0.6rem;" title="Valid Adult ID (Order Goes Through)">
+                      🟢 Valid ID ➔ Order Goes Through
+                    </button>
+                    <button type="button" class="btn-sim pass" data-action="menu-spoof" data-scenario="passport_adult_verified" style="width:100%;font-size:0.78rem;padding:0.45rem 0.6rem;" title="Digital Passport (Order Goes Through)">
+                      📘 Passport ➔ Order Goes Through
+                    </button>
+                    <button type="button" class="btn-sim fail" data-action="menu-spoof" data-scenario="underage_minor" style="width:100%;font-size:0.78rem;padding:0.45rem 0.6rem;" title="Minor ID (Issue With Order)">
+                      👶 Underage ➔ Issue with Order
+                    </button>
+                    <button type="button" class="btn-sim fail" data-action="menu-spoof" data-scenario="expired_document" style="width:100%;font-size:0.78rem;padding:0.45rem 0.6rem;" title="Expired ID (Issue With Order)">
+                      📅 Expired ID ➔ Issue with Order
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Expandable Companion Phone QR Scanner for 2nd Device Testing -->
+                <div style="text-align:center;padding:0.6rem 0.75rem;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;">
+                  <button type="button" id="btn-toggle-menu-qr" style="background:none;border:none;color:#94a3b8;font-size:0.74rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;">
+                    <span>📷 Scan with Second Device Camera Instead</span>
+                    <span id="menu-qr-chevron">▼</span>
+                  </button>
+                  <div id="menu-qr-collapsible" style="display:none;margin-top:0.75rem;">
+                    <div id="menu-modal-qr-container" style="display:flex;justify-content:center;margin:0.25rem 0;"></div>
+                    <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.25rem;">Scan with smartphone camera to present digital wallet</div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Option 2 Container: Physical ID Flow -->
+              <div id="panel-opt-physical" style="display:none;">
+                <div class="physical-id-card-view">
+                  <div class="physical-id-icon">🪪</div>
+                  <div class="physical-id-title">Physical ID Check at Table #12</div>
+                  <p class="physical-id-desc">
+                    Your order will be placed immediately! Please have your physical driver's license, state ID, or passport ready. Your server will manually inspect your ID before handing over alcoholic drinks.
+                  </p>
+                  <button type="button" class="btn-confirm-physical-id" id="btn-confirm-physical-id-order">
+                    Place Order with Physical ID Check at Table ➔
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Modal Step 2: Order Placed Notification Screen (Order Goes Through) -->
+            <div id="modal-view-confirmed" style="display:none;text-align:center;">
+              <div style="font-size:3.2rem;margin-bottom:0.35rem;">🎉</div>
+              <h2 style="font-size:1.45rem;font-weight:800;color:#34d399;margin-bottom:0.25rem;">Order Placed! Sent to Bar &amp; Kitchen</h2>
+              <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:1.1rem;">Table #12 · Your order has been placed and is being prepared</p>
+
+              <!-- Verification Confirmation Status Badge (No age displayed, just confirmed!) -->
+              <div id="modal-confirmed-customer-box" style="display:flex;align-items:center;gap:0.85rem;padding:0.85rem 1rem;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:14px;text-align:left;margin-bottom:1.1rem;">
+                <div style="width:40px;height:40px;border-radius:50%;background:rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:#34d399;flex-shrink:0;">✓</div>
+                <div>
+                  <div style="font-size:0.72rem;color:#6ee7b7;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Apple Wallet Verified</div>
+                  <strong style="font-size:0.95rem;color:#fff;">Order Approved for Delivery</strong>
+                  <div style="font-size:0.76rem;color:#a7f3d0;">Your digital ID was verified. Drinks will be served directly with no physical card check!</div>
+                </div>
+              </div>
+
+              <!-- Physical ID Status Note (shown when physical option selected) -->
+              <div id="modal-physical-id-notice" style="display:none;padding:0.85rem 1rem;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:14px;text-align:left;margin-bottom:1.1rem;">
+                <div style="display:flex;gap:0.6rem;align-items:flex-start;">
+                  <span style="font-size:1.3rem;">📋</span>
+                  <div>
+                    <strong style="font-size:0.88rem;color:#fef3c7;display:block;">Physical ID Inspection at Table #12</strong>
+                    <span style="font-size:0.76rem;color:#fde68a;">Please have your physical government-issued ID ready for your server when drinks arrive.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Itemized Receipt -->
+              <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:0.9rem;text-align:left;margin-bottom:1.2rem;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.8rem;color:var(--text-dim);">
+                  <span>Order Reference</span>
+                  <strong style="color:#fff;" id="modal-receipt-id">#TAB-12-9481</strong>
+                </div>
+                <div id="modal-receipt-items-list" style="border-top:1px solid rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.06);padding:0.45rem 0;margin:0.45rem 0;font-size:0.82rem;"></div>
+                <div style="display:flex;justify-content:space-between;font-weight:700;font-size:0.95rem;color:#fff;">
+                  <span>Order Total</span>
+                  <span style="color:var(--accent-cyan);" id="modal-receipt-total">$0.00</span>
+                </div>
+              </div>
+
+              <button type="button" class="btn-brand-primary" id="btn-finish-menu-order">Order More Items</button>
+            </div>
+
+            <!-- Modal Step 3: Issue With Order Alert View -->
+            <div id="modal-view-blocked" style="display:none;text-align:center;">
+              <div style="font-size:3rem;margin-bottom:0.35rem;">⚠️</div>
+              <h2 style="font-size:1.4rem;font-weight:800;color:#fb7185;margin-bottom:0.25rem;">Issue With Your Order</h2>
+              <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:1rem;">Table #12 · We encountered an issue processing the restricted items in your order.</p>
+
+              <!-- Issue Explanation Box (No bouncer-style age readout!) -->
+              <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:14px;padding:0.9rem 1rem;margin-bottom:1.2rem;text-align:left;">
+                <div style="display:flex;gap:0.6rem;align-items:flex-start;">
+                  <span style="font-size:1.2rem;">ℹ️</span>
+                  <div>
+                    <strong style="font-size:0.88rem;color:#fca5a5;display:block;">Restricted Item Verification Issue</strong>
+                    <span id="modal-blocked-reason" style="font-size:0.78rem;color:#fecdd3;line-height:1.45;">There was an issue verifying your ID for the alcoholic beverage(s) in your cart. You may remove restricted items to place your food order, or ask your server for assistance at Table #12.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:0.55rem;">
+                <button type="button" class="btn-brand-primary" id="btn-remove-restricted-keep-food" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.2);color:#fff;">
+                  Remove Alcoholic Drinks &amp; Place Food Order
+                </button>
+                <button type="button" class="btn-brand-primary" id="btn-retry-menu-verify">
+                  Try Apple Wallet Verification Again
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- ── Interactive Hardware & Scenario Simulator Dock ─────────────── -->
+    <aside class="simulator-bar">
+      <div class="sim-inner">
+        <div class="sim-title">
+          <span class="sim-dot"></span>
+          <span>Presentation Demo Controller:</span>
+        </div>
+        <div class="sim-buttons" id="sim-buttons">
+          <button class="btn-sim pass" data-scenario="adult_verified" title="Radu R. (Age 28, CA DMV)">🟢 Valid Adult (28)</button>
+          <button class="btn-sim pass" data-scenario="passport_adult_verified" title="Sophia C. (Age 28, US Digital Passport)">📘 Passport Adult (28)</button>
+          <button class="btn-sim fail" data-scenario="underage_minor" title="Lucas M. (Age 17, CA DMV)">👶 Underage (17)</button>
+          <button class="btn-sim fail" data-scenario="expired_document" title="Elena V. (Expired NY license)">📅 Expired ID</button>
+          <button class="btn-sim warn" data-scenario="untrusted_issuer" title="Unknown Rogue CA">🛡️ Untrusted Root</button>
+          <button class="btn-sim warn" data-scenario="tampered_integrity" title="Digest Mismatch / Tampered MSO">⚠️ Tampered</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>PassGate Web-to-Mobile Digital Wallet Flow</span>
+      <span class="dot-sep">·</span>
+      <span>CredenceID Cloud SDK</span>
+      <span class="dot-sep">·</span>
+      <span id="clock"></span>
+    </footer>
+  </div>
+
+  <!-- QR Code Generator Library -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
