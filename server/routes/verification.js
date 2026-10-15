@@ -95,24 +95,20 @@ function clearSessionTimers(sessionId) {
 /**
  * Processes and executes a mock payload verification pipeline on a session.
  */
-function applyMockPayloadToSession(session, payload, delayMs = 700) {
+function applyMockPayloadToSession(session, payload, _delayMs = 0) {
   clearSessionTimers(session.id);
 
-  // Transition to verifying state immediately
-  session.status = "verifying";
+  // Disable remote cloud polling for this session so live polls never overwrite test results
+  session._liveMode = false;
+
+  const minAge = getMinAge();
+  const result = verifyMdlPresentation(payload, minAge, session.id);
+
+  session.status = "completed";
+  session.result = result;
   session.updatedAt = new Date().toISOString();
 
-  // Simulate cryptographic verification computation delay
-  const timer = setTimeout(() => {
-    const minAge = getMinAge();
-    const result = verifyMdlPresentation(payload, minAge);
-
-    session.status = "completed";
-    session.result = result;
-    session.updatedAt = new Date().toISOString();
-  }, delayMs);
-
-  sessionTimers.set(session.id, [timer]);
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -431,13 +427,16 @@ router.post("/mock-payload", async (req, res) => {
     }
 
     // Process and advance the state machine
-    applyMockPayloadToSession(session, payloadToEvaluate, delay_ms);
+    const result = applyMockPayloadToSession(session, payloadToEvaluate, delay_ms);
 
     return res.json({
+      success: true,
       message: `Mock payload processed for session ${session.id}`,
       scenario_applied: scenario,
       session_id: session.id,
       status: session.status,
+      decision: result.decision,
+      result: result,
     });
   } catch (err) {
     console.error("[POST /mock-payload]", err);

@@ -106,8 +106,16 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
 
-// Serve the frontend from /public
-app.use(express.static(path.join(__dirname, "..", "public")));
+// Serve the frontend from /public with no-cache headers for demo testing
+app.use(
+  express.static(path.join(__dirname, "..", "public"), {
+    setHeaders: (res) => {
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.set("Pragma", "no-cache");
+      res.set("Expires", "0");
+    },
+  })
+);
 
 // ── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api/verification", verificationRoutes);

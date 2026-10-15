@@ -19,9 +19,29 @@
     qr:     $("#tab-panel-qr"),
     verify: $("#tab-panel-verify"),
     menu:   $("#tab-panel-menu"),
+    test:   $("#tab-panel-test"),
   };
 
+  const tabMeta = {
+    qr:     { icon: "📱", label: "Scan QR" },
+    verify: { icon: "🛡️", label: "Age Check" },
+    menu:   { icon: "🍸", label: "Table Order" },
+    test:   { icon: "🧪", label: "Test Sandbox" },
+  };
+
+  const mobileNavToggle = $("#mobile-nav-toggle");
+  const mobileNavLabel  = $("#mobile-nav-label");
+  const mobileNavIcon   = $("#mobile-nav-icon");
+  const demoTabsNav     = $("#demo-tabs-nav");
+
   let activeTabKey = "qr";
+
+  function updateMobileNavTrigger(tabKey) {
+    if (tabMeta[tabKey]) {
+      if (mobileNavLabel) mobileNavLabel.textContent = tabMeta[tabKey].label;
+      if (mobileNavIcon) mobileNavIcon.textContent = tabMeta[tabKey].icon;
+    }
+  }
 
   function switchTab(tabKey) {
     if (!tabPanels[tabKey]) return;
@@ -40,6 +60,14 @@
       }
     });
 
+    // Update mobile toggle label & close dropdown
+    updateMobileNavTrigger(tabKey);
+    if (demoTabsNav && mobileNavToggle) {
+      demoTabsNav.classList.remove("open");
+      mobileNavToggle.setAttribute("aria-expanded", "false");
+      mobileNavToggle.classList.remove("active");
+    }
+
     // Update URL hash without scroll jump
     try {
       history.replaceState(null, "", `#${tabKey}`);
@@ -49,8 +77,28 @@
     ensureTabSession(tabKey);
   }
 
+  // Mobile nav drawer toggle event listeners
+  if (mobileNavToggle && demoTabsNav) {
+    mobileNavToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = demoTabsNav.classList.toggle("open");
+      mobileNavToggle.setAttribute("aria-expanded", String(isOpen));
+      mobileNavToggle.classList.toggle("active", isOpen);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!demoTabsNav.contains(e.target) && !mobileNavToggle.contains(e.target)) {
+        demoTabsNav.classList.remove("open");
+        mobileNavToggle.setAttribute("aria-expanded", "false");
+        mobileNavToggle.classList.remove("active");
+      }
+    });
+  }
+
   tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const target = btn.getAttribute("data-tab");
       if (target) switchTab(target);
     });
@@ -237,6 +285,7 @@
   }
 
   async function startNewDirectSession() {
+    window.isTestPersonaActive = false;
     goDirectState("awaiting");
     if (awaitingStatus) awaitingStatus.textContent = "Initiating OpenID4VP web session…";
     if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = "Terminal Ready · Waiting for patron presentation or verify action";
@@ -245,6 +294,16 @@
     if (portraitActivePanel) portraitActivePanel.style.display = "none";
     if (portraitPrivacyNote) portraitPrivacyNote.style.display = "none";
     if (grantedPortraitImg) grantedPortraitImg.src = "";
+
+    // Cleanup Sentinel Passes
+    if (typeof destroySentinelPass === "function") {
+      destroySentinelPass("terminal");
+      destroySentinelPass("mobile");
+    }
+    const termPassCont = $("#terminal-sentinel-pass-container");
+    if (termPassCont) { termPassCont.innerHTML = ""; termPassCont.style.display = "none"; }
+    const mobPassCont = $("#mobile-sentinel-pass-container");
+    if (mobPassCont) { mobPassCont.innerHTML = ""; mobPassCont.style.display = "none"; }
 
     try {
       const session = await api("/session", { method: "POST" });
@@ -301,8 +360,16 @@
     }
   }
 
+  function stopDirectPolling() {
+    if (directPollTimer) {
+      clearInterval(directPollTimer);
+      directPollTimer = null;
+    }
+  }
+
   function startDirectPolling(sessionId) {
     stopDirectPolling();
+    if (window.isTestPersonaActive) return;
     directPollTimer = setInterval(async () => {
       try {
         const session = await api(`/session/${sessionId}`);
@@ -331,11 +398,436 @@
     }, 1000);
   }
 
-  function stopDirectPolling() {
-    if (directPollTimer) {
-      clearInterval(directPollTimer);
-      directPollTimer = null;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENTINEL ANTI-SPOOF INTERACTIVE PASS ENGINE
+  // Defeats screenshots & screen recordings for door bouncer verification:
+  // 1. High-precision live chronometer with rotating sweep & elapsed counter
+  // 2. Interactive touch ripple shockwaves with radial particle bursts & haptics
+  // 3. 3D perspective card tilt with gyroscope orientation and touch parallax
+  // 4. Procedural continuous guilloche mathematical wave background
+  // 5. Interactive bouncer challenge seal with check counter & audit trail
+  // ═══════════════════════════════════════════════════════════════════════════
+  const activeSentinelInstances = new Map();
+
+  function destroySentinelPass(instanceId) {
+    const inst = activeSentinelInstances.get(instanceId);
+    if (!inst) return;
+    if (inst.clockTimer) clearInterval(inst.clockTimer);
+    if (inst.animFrame) {
+      if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+        window.cancelAnimationFrame(inst.animFrame);
+      } else {
+        clearTimeout(inst.animFrame);
+      }
     }
+    if (typeof inst.destroyListeners === "function") inst.destroyListeners();
+    activeSentinelInstances.delete(instanceId);
+  }
+
+  function renderSentinelPass(container, result, instanceId) {
+    if (!container || !result) return;
+    destroySentinelPass(instanceId);
+    container.innerHTML = "";
+    container.style.display = "block";
+
+    const a = result.attributes || {};
+    const friendlyType = result.document?.friendly_type || (a.passport_number ? "Digital Passport" : "DMV Driver's License");
+    const fullName = `${a.given_name || "Verified"} ${a.family_name || "Patron"}`.trim();
+    const age = result.policy?.computed_age || 28;
+    const portrait = a.portrait;
+    const hasPortrait = typeof portrait === "string" && portrait.startsWith("data:image/");
+    const sessionToken = `PG-${Math.floor(1000 + Math.random() * 9000)}-LIVE`;
+    const issueTime = new Date();
+
+    const passId = `sentinel-pass-${instanceId}`;
+    const canvasId = `sentinel-canvas-${instanceId}`;
+    const cardId = `sentinel-card-${instanceId}`;
+    const clockId = `sentinel-clock-${instanceId}`;
+    const ampmId = `sentinel-ampm-${instanceId}`;
+    const dateId = `sentinel-date-${instanceId}`;
+    const elapsedId = `sentinel-elapsed-${instanceId}`;
+    const sealId = `sentinel-seal-${instanceId}`;
+    const counterId = `sentinel-counter-${instanceId}`;
+    const rippleLayerId = `sentinel-ripples-${instanceId}`;
+
+    container.innerHTML = `
+      <div class="sentinel-pass-wrapper" id="${passId}">
+        <div class="sentinel-card" id="${cardId}" title="Tap anywhere to trigger dynamic shockwaves">
+          <!-- Procedural Guilloche Canvas Layer -->
+          <canvas class="sentinel-guilloche-canvas" id="${canvasId}"></canvas>
+          
+          <!-- Holographic Iridescent Dynamic Sheen -->
+          <div class="sentinel-holo-sheen"></div>
+
+          <!-- Header -->
+          <div class="sentinel-header">
+            <div class="sentinel-brand">
+              <span class="sentinel-shield-icon">🛡️</span>
+              <div class="sentinel-brand-text">
+                <span class="sentinel-title">PASSGATE SENTINEL™</span>
+                <span class="sentinel-subtitle">Door &amp; Bar Anti-Spoof Pass</span>
+              </div>
+            </div>
+            <div class="sentinel-venue-pill">
+              <span class="venue-indicator-dot"></span>
+              <span class="venue-name">COPPER &amp; CASK</span>
+            </div>
+          </div>
+
+          <!-- Live High-Precision Chronometer (Anti-Screenshot) -->
+          <div class="sentinel-chronometer-strip">
+            <div class="chrono-clock-col">
+              <div class="chrono-label">LIVE SYSTEM CHRONOMETER</div>
+              <div class="chrono-time-display">
+                <span class="chrono-hours-mins" id="${clockId}">--:--:--</span>
+                <span class="chrono-ampm" id="${ampmId}">--</span>
+                <span class="chrono-radar-ring" title="Live 60fps Sweep">
+                  <span class="chrono-radar-sweep"></span>
+                </span>
+              </div>
+              <div class="chrono-date-display" id="${dateId}">--------, --- --, ----</div>
+            </div>
+            <div class="chrono-elapsed-col">
+              <div class="chrono-label">PASS ISSUED</div>
+              <div class="chrono-elapsed-val" id="${elapsedId}">Just now</div>
+              <div class="chrono-valid-tag">VALID FOR ENTRY</div>
+            </div>
+          </div>
+
+          <!-- Central Patron Identity & Verified Age Display -->
+          <div class="sentinel-body">
+            <div class="sentinel-age-badge">
+              <div class="sentinel-age-num">21+</div>
+              <div class="sentinel-age-label">VERIFIED</div>
+            </div>
+
+            <div class="sentinel-patron-info">
+              <div class="sentinel-patron-name">${fullName}</div>
+              <div class="sentinel-doc-tag">${friendlyType} (Age ${age})</div>
+              <div class="sentinel-token-tag">
+                <span class="sentinel-token-label">AUTH:</span>
+                <span class="sentinel-token-val">${sessionToken}</span>
+              </div>
+            </div>
+
+            ${hasPortrait ? `
+              <div class="sentinel-portrait-box">
+                <img class="sentinel-portrait-img" src="${portrait}" alt="${fullName}" />
+                <span class="sentinel-portrait-badge">MDOC</span>
+              </div>
+            ` : `
+              <div class="sentinel-portrait-box" style="display:flex;align-items:center;justify-content:center;background:rgba(16,185,129,0.15);">
+                <span style="font-size:1.8rem;">🪪</span>
+                <span class="sentinel-portrait-badge">MDOC</span>
+              </div>
+            `}
+          </div>
+
+          <!-- Interactive Bouncer Challenge Zone (Anti-Video Recording) -->
+          <div class="sentinel-bouncer-challenge-zone" id="${sealId}" role="button" tabindex="0" title="Click or tap to verify live responsiveness">
+            <div class="bouncer-seal-glow"></div>
+            <div class="bouncer-seal-content">
+              <span class="bouncer-seal-icon">⚡</span>
+              <div class="bouncer-seal-titles">
+                <div class="bouncer-seal-primary">TAP OR HOLD TO AUTHENTICATE</div>
+                <div class="bouncer-seal-secondary" id="${sealId}-status">Tap anywhere for live touch ripple &amp; haptics</div>
+              </div>
+            </div>
+            <div class="bouncer-tap-counter" id="${counterId}">0 CHECKS</div>
+          </div>
+
+          <!-- Shockwave Ripple Layer (Generated at exact tap coordinates) -->
+          <div class="sentinel-ripple-layer" id="${rippleLayerId}"></div>
+
+          <!-- Footer / Anti-Spoof Bouncer Legend -->
+          <div class="sentinel-footer">
+            <div class="sentinel-security-pills">
+              <span class="sec-pill"><span>✓</span> 3D Gyro Parallax</span>
+              <span class="sec-pill"><span>✓</span> Touch Shockwave</span>
+              <span class="sec-pill"><span>✓</span> Live Micro-Sweep</span>
+            </div>
+            <div class="sentinel-anti-fraud-tip">
+              <strong>Bouncer Security Tip:</strong> Screenshots freeze the clock. Screen recordings fail touch ripple and cannot react to 3D phone tilt.
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const card = document.getElementById(cardId);
+    const canvas = document.getElementById(canvasId);
+    const clockEl = document.getElementById(clockId);
+    const ampmEl = document.getElementById(ampmId);
+    const dateEl = document.getElementById(dateId);
+    const elapsedEl = document.getElementById(elapsedId);
+    const seal = document.getElementById(sealId);
+    const counterBadge = document.getElementById(counterId);
+    const sealStatus = document.getElementById(`${sealId}-status`);
+    const rippleLayer = document.getElementById(rippleLayerId);
+
+    // 1. Live Chronometer Loop
+    function updateClock() {
+      const now = new Date();
+      let hours = now.getHours();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      const mins = String(now.getMinutes()).padStart(2, "0");
+      const secs = String(now.getSeconds()).padStart(2, "0");
+      if (clockEl) clockEl.textContent = `${hours}:${mins}:${secs}`;
+      if (ampmEl) ampmEl.textContent = ampm;
+
+      const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+      const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+      if (dateEl) {
+        dateEl.textContent = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+      }
+
+      // Elapsed calculation
+      if (elapsedEl) {
+        const elapsedSecs = Math.floor((now.getTime() - issueTime.getTime()) / 1000);
+        if (elapsedSecs < 5) {
+          elapsedEl.textContent = "Just now";
+        } else if (elapsedSecs < 60) {
+          elapsedEl.textContent = `${elapsedSecs}s ago`;
+        } else {
+          const m = Math.floor(elapsedSecs / 60);
+          elapsedEl.textContent = `${m}m ${elapsedSecs % 60}s ago`;
+        }
+      }
+    }
+    updateClock();
+    const clockTimer = setInterval(updateClock, 500);
+
+    // 2. Procedural Guilloche Canvas Generator (Smooth Mathematical Waves)
+    let animFrame = null;
+    if (canvas && canvas.getContext) {
+      const ctx = canvas.getContext("2d");
+      let dpr = window.devicePixelRatio || 1;
+      let phase = 0;
+
+      const raf = (typeof window !== "undefined" && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (fn) => setTimeout(fn, 16);
+      function resizeCanvas() {
+        if (!card) return;
+        const rect = card.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resizeCanvas();
+
+      function drawGuilloche() {
+        if (!canvas || !ctx) return;
+        const width = canvas.width / dpr;
+        const height = canvas.height / dpr;
+        if (width <= 0 || height <= 0) {
+          animFrame = raf(drawGuilloche);
+          return;
+        }
+
+        ctx.clearRect(0, 0, width, height);
+        phase += 0.015;
+
+        // Draw multiple waving curves that resemble banknote guilloche
+        const waveCount = 5;
+        for (let w = 0; w < waveCount; w++) {
+          ctx.beginPath();
+          const hue = 150 + w * 12; // Emerald to Cyan hues
+          ctx.strokeStyle = `hsla(${hue}, 80%, 55%, 0.35)`;
+          ctx.lineWidth = 1.2;
+
+          const baseFreq = 0.012 + w * 0.003;
+          const amp = 16 + w * 5;
+          const yOffset = (height / (waveCount + 1)) * (w + 1);
+
+          for (let x = 0; x <= width; x += 3) {
+            const y = yOffset + Math.sin(x * baseFreq + phase + w) * amp + Math.cos(x * 0.02 - phase * 0.8) * (amp * 0.4);
+            if (x === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        }
+
+        animFrame = raf(drawGuilloche);
+      }
+      animFrame = raf(drawGuilloche);
+    }
+
+    // 3. Dynamic Touch Ripple & Spark Spawner (Anti-Video Recording Proof)
+    function triggerShockwave(x, y) {
+      if (!rippleLayer) return;
+
+      // Primary shockwave ring
+      const wave = document.createElement("div");
+      wave.className = "sentinel-shockwave";
+      wave.style.left = `${x}px`;
+      wave.style.top = `${y}px`;
+      rippleLayer.appendChild(wave);
+
+      // Secondary trailing wave
+      const wave2 = document.createElement("div");
+      wave2.className = "sentinel-shockwave secondary";
+      wave2.style.left = `${x}px`;
+      wave2.style.top = `${y}px`;
+      rippleLayer.appendChild(wave2);
+
+      // Radial micro-sparks
+      const sparkCount = 8;
+      for (let i = 0; i < sparkCount; i++) {
+        const spark = document.createElement("div");
+        spark.className = "sentinel-spark";
+        spark.style.left = `${x}px`;
+        spark.style.top = `${y}px`;
+        const angle = (i / sparkCount) * 2 * Math.PI + (Math.random() - 0.5) * 0.5;
+        const dist = 35 + Math.random() * 45;
+        spark.style.setProperty("--dx", `${Math.cos(angle) * dist}px`);
+        spark.style.setProperty("--dy", `${Math.sin(angle) * dist}px`);
+        rippleLayer.appendChild(spark);
+        setTimeout(() => spark.remove(), 700);
+      }
+
+      setTimeout(() => {
+        wave.remove();
+        wave2.remove();
+      }, 900);
+
+      // Mobile Haptic Feedback
+      if (navigator.vibrate) {
+        try { navigator.vibrate([15, 20]); } catch (_) {}
+      }
+    }
+
+    function onCardPointerDown(e) {
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      triggerShockwave(x, y);
+    }
+
+    // 4. Interactive 3D Perspective Tilt & Holographic Sheen
+    function updateTilt(rotX, rotY, sheenXPercent, sheenYPercent) {
+      if (!card) return;
+      card.style.transform = `perspective(1000px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg)`;
+      card.style.setProperty("--sheen-x", `${sheenXPercent.toFixed(1)}%`);
+      card.style.setProperty("--sheen-y", `${sheenYPercent.toFixed(1)}%`);
+    }
+
+    function onPointerMove(e) {
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : rect.left + rect.width / 2);
+      const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : rect.top + rect.height / 2);
+
+      const normX = (clientX - rect.left) / rect.width - 0.5;
+      const normY = (clientY - rect.top) / rect.height - 0.5;
+
+      const rotY = normX * 16;  // -8 to +8 deg
+      const rotX = -normY * 16; // -8 to +8 deg
+      const sheenX = ((normX + 0.5) * 100);
+      const sheenY = ((normY + 0.5) * 100);
+
+      updateTilt(rotX, rotY, sheenX, sheenY);
+    }
+
+    function onPointerLeave() {
+      if (!card) return;
+      card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg)";
+      card.style.setProperty("--sheen-x", "50%");
+      card.style.setProperty("--sheen-y", "50%");
+    }
+
+    // Gyroscope Device Orientation for Physical Mobile Devices
+    function onDeviceOrientation(e) {
+      if (e.gamma == null || e.beta == null) return;
+      const gamma = Math.max(-30, Math.min(30, e.gamma));
+      const beta = Math.max(-20, Math.min(40, e.beta - 45));
+
+      const rotY = (gamma / 30) * 12;
+      const rotX = (-beta / 30) * 12;
+      const sheenX = 50 + (gamma / 30) * 40;
+      const sheenY = 50 + (beta / 30) * 40;
+
+      updateTilt(rotX, rotY, sheenX, sheenY);
+    }
+
+    // 5. Bouncer Challenge Seal Action
+    let inspectionCount = 0;
+    function onBouncerSealTrigger(e) {
+      if (e) e.stopPropagation();
+      inspectionCount++;
+      if (counterBadge) {
+        counterBadge.textContent = `${inspectionCount} ${inspectionCount === 1 ? "CHECK" : "CHECKS"}`;
+      }
+
+      if (card) {
+        card.classList.add("active-surge");
+        setTimeout(() => card.classList.remove("active-surge"), 600);
+      }
+
+      if (sealStatus) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+        sealStatus.innerHTML = `<strong style="color:#34d399;">✓ Live Verified Touch:</strong> Authentic at ${timeStr}`;
+      }
+
+      // Center shockwave on seal
+      if (seal && card) {
+        const sealRect = seal.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        const cx = sealRect.left - cardRect.left + sealRect.width / 2;
+        const cy = sealRect.top - cardRect.top + sealRect.height / 2;
+        triggerShockwave(cx, cy);
+      }
+
+      if (navigator.vibrate) {
+        try { navigator.vibrate([25, 40, 25]); } catch (_) {}
+      }
+    }
+
+    // Attach Event Listeners
+    if (card) {
+      card.addEventListener("pointerdown", onCardPointerDown);
+      card.addEventListener("pointermove", onPointerMove);
+      card.addEventListener("pointerleave", onPointerLeave);
+      card.addEventListener("touchmove", onPointerMove, { passive: true });
+      card.addEventListener("touchend", onPointerLeave);
+    }
+
+    if (seal) {
+      seal.addEventListener("click", onBouncerSealTrigger);
+    }
+
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener("deviceorientation", onDeviceOrientation, true);
+    }
+
+    function destroyListeners() {
+      if (card) {
+        card.removeEventListener("pointerdown", onCardPointerDown);
+        card.removeEventListener("pointermove", onPointerMove);
+        card.removeEventListener("pointerleave", onPointerLeave);
+        card.removeEventListener("touchmove", onPointerMove);
+        card.removeEventListener("touchend", onPointerLeave);
+      }
+      if (seal) {
+        seal.removeEventListener("click", onBouncerSealTrigger);
+      }
+      if (window.DeviceOrientationEvent) {
+        window.removeEventListener("deviceorientation", onDeviceOrientation, true);
+      }
+    }
+
+    activeSentinelInstances.set(instanceId, {
+      clockTimer,
+      animFrame,
+      destroyListeners,
+    });
   }
 
   function renderDirectGranted(result) {
@@ -362,7 +854,13 @@
       }
     }
 
-    // 2. Attributes panel
+    // 2. Render Interactive Sentinel Anti-Spoof Pass on Door Terminal
+    const terminalSentinelContainer = $("#terminal-sentinel-pass-container");
+    if (terminalSentinelContainer) {
+      renderSentinelPass(terminalSentinelContainer, result, "terminal");
+    }
+
+    // 3. Attributes panel
     if (grantedDetails) {
       grantedDetails.innerHTML = `
         <div class="attr-row"><span class="attr-label">Full Name:</span><span class="attr-val highlight">${fullName}</span></div>
@@ -373,7 +871,7 @@
       `;
     }
 
-    // 3. Trust flags
+    // 4. Trust flags
     if (trustBadges) {
       trustBadges.innerHTML = `
         <div class="trust-badge valid"><span class="trust-icon">✓</span> Issuer Signature Authentic</div>
@@ -384,6 +882,13 @@
   }
 
   function renderDirectDenied(result) {
+    destroySentinelPass("terminal");
+    const terminalSentinelContainer = $("#terminal-sentinel-pass-container");
+    if (terminalSentinelContainer) {
+      terminalSentinelContainer.innerHTML = "";
+      terminalSentinelContainer.style.display = "none";
+    }
+
     if (deniedReason) {
       deniedReason.textContent = result.reason || "Policy Check Failed: Customer does not meet legal drinking age requirements (21+).";
     }
@@ -554,32 +1059,252 @@
     throw unsupportedErr;
   }
 
-  // Trigger scenario helper for direct kiosk
-  async function triggerDirectScenario(scenarioKey) {
+  // ── Pre-Computed Test Personas for Direct Demonstration ─────────────────
+  const TEST_PERSONAS = {
+  "adult_verified": {
+    "decision": "GRANTED",
+    "reason": "Identity verified & policy requirements satisfied.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 28,
+      "age_over_21": true
+    },
+    "trust": {
+      "issuer_authenticated": true,
+      "device_signature_valid": true,
+      "data_integrity": "VERIFIED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.iso.18013.5.1.mDL",
+      "friendly_type": "ISO/IEC 18013-5 mdoc"
+    },
+    "attributes": {
+      "given_name": "Radu",
+      "family_name": "Richardson",
+      "birth_date": "1998-03-15",
+      "expiry_date": "2028-03-15",
+      "issuing_authority": "California DMV",
+      "issuing_country": "USA",
+      "document_number": "CA-D8832910",
+      "age_over_21": true,
+      "portrait": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjQwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI0MCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzFlMjkzYiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InNraW4iIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZjVkMGI1Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2UwYjA4YyIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iaGFpciIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyZDJhMjYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWExODE2Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJzaGlydCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwMjg0YzciLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMDM2OWExIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI0MCIgcng9IjE2IiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxwYXRoIGQ9Ik0gMzAgMjQwIEwgMzAgMjA1IFEgMzAgMTY4IDEwMCAxNjggUSAxNzAgMTY4IDE3MCAyMDUgTCAxNzAgMjQwIFoiIGZpbGw9InVybCgjc2hpcnQpIi8+CiAgPHJlY3QgeD0iODUiIHk9IjEzOCIgd2lkdGg9IjMwIiBoZWlnaHQ9IjMyIiBmaWxsPSJ1cmwoI3NraW4pIi8+CiAgPGVsbGlwc2UgY3g9IjEwMCIgY3k9IjEwNCIgcng9IjQyIiByeT0iNTAiIGZpbGw9InVybCgjc2tpbikiLz4KICA8cGF0aCBkPSJNIDU4IDEwMCBRIDU2IDU4IDEwMCA1OCBRIDE0NCA1OCAxNDIgMTAwIFEgMTMwIDc0IDEwMCA3NCBRIDcwIDc0IDU4IDEwMCBaIiBmaWxsPSJ1cmwoI2hhaXIpIi8+CiAgPGVsbGlwc2UgY3g9Ijg1IiBjeT0iMTA1IiByeD0iNCIgcnk9IjMiIGZpbGw9IiMxZTI5M2IiLz4KICA8ZWxsaXBzZSBjeD0iMTE1IiBjeT0iMTA1IiByeD0iNCIgcnk9IjMiIGZpbGw9IiMxZTI5M2IiLz4KICA8cGF0aCBkPSJNIDc3IDk3IFEgODUgOTQgOTMgOTciIHN0cm9rZT0iIzJkMmEyNiIgc3Ryb2tlLXdpZHRoPSIyLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gMTA3IDk3IFEgMTE1IDk0IDEyMyA5NyIgc3Ryb2tlPSIjMmQyYTI2IiBzdHJva2Utd2lkdGg9IjIuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTSAxMDAgMTAzIEwgOTcgMTE4IEwgMTAzIDExOCIgc3Ryb2tlPSIjYzk5MjZiIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gOTAgMTMwIFEgMTAwIDEzNyAxMTAgMTMwIiBzdHJva2U9IiNiMDcwNDgiIHN0cm9rZS13aWR0aD0iMi41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cmVjdCB4PSIxMiIgeT0iMTIiIHdpZHRoPSI1MiIgaGVpZ2h0PSIxOCIgcng9IjQiIGZpbGw9InJnYmEoNTYsMTg5LDI0OCwwLjE1KSIgc3Ryb2tlPSJyZ2JhKDU2LDE4OSwyNDgsMC40KSIgc3Ryb2tlLXdpZHRoPSIxIi8+CiAgPHRleHQgeD0iMzgiIHk9IjI0IiBmaWxsPSIjMzhiZGY4IiBmb250LXNpemU9IjgiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLHN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5tREwgVkVSSUZJRUQ8L3RleHQ+Cjwvc3ZnPg=="
+    }
+  },
+  "passport_adult_verified": {
+    "decision": "GRANTED",
+    "reason": "Identity verified & policy requirements satisfied.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 28,
+      "age_over_21": true
+    },
+    "trust": {
+      "issuer_authenticated": true,
+      "device_signature_valid": true,
+      "data_integrity": "VERIFIED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.icao.mdoc",
+      "friendly_type": "ICAO Doc 9303 Digital Passport"
+    },
+    "attributes": {
+      "given_name": "Sophia",
+      "family_name": "Chen",
+      "birth_date": "1998-07-20",
+      "expiry_date": "2031-07-20",
+      "issuing_authority": "U.S. Department of State",
+      "issuing_country": "USA",
+      "document_number": "US-P9028194",
+      "passport_number": "US-P9028194",
+      "portrait": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjQwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI0MCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InBiZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxZTFiNGIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJwc2tpbiIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmZWQ3YWEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjZmRiYTc0Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJwaGFpciIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxYzE5MTciLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGMwYTA5Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJwc2hpcnQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjNGY0NmU1Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzM3MzBhMyIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyNDAiIHJ4PSIxNiIgZmlsbD0idXJsKCNwYmcpIi8+CiAgPHBhdGggZD0iTSAzMCAyNDAgTCAzMCAyMDUgUSAzMCAxNjggMTAwIDE2OCBRIDE3MCAxNjggMTcwIDIwNSBMIDE3MCAyNDAgWiIgZmlsbD0idXJsKCNwc2hpcnQpIi8+CiAgPHJlY3QgeD0iODYiIHk9IjEzOCIgd2lkdGg9IjI4IiBoZWlnaHQ9IjMyIiBmaWxsPSJ1cmwoI3Bza2luKSIvPgogIDxwYXRoIGQ9Ik0gNTAgMTAwIFEgNDUgMTYwIDUyIDE5NSBRIDEwMCAyMDUgMTQ4IDE5NSBRIDE1NSAxNjAgMTUwIDEwMCBaIiBmaWxsPSJ1cmwoI3BoYWlyKSIvPgogIDxlbGxpcHNlIGN4PSIxMDAiIGN5PSIxMDQiIHJ4PSI0MCIgcnk9IjQ4IiBmaWxsPSJ1cmwoI3Bza2luKSIvPgogIDxwYXRoIGQ9Ik0gNTYgMTAwIFEgNTYgNTYgMTAwIDU2IFEgMTQ0IDU2IDE0NCAxMDAgUSAxMzIgNzAgMTAwIDcwIFEgNjggNzAgNTYgMTAwIFoiIGZpbGw9InVybCgjcGhhaXIpIi8+CiAgPGVsbGlwc2UgY3g9Ijg1IiBjeT0iMTA1IiByeD0iNCIgcnk9IjMiIGZpbGw9IiMxZTFiNGIiLz4KICA8ZWxsaXBzZSBjeD0iMTE1IiBjeT0iMTA1IiByeD0iNCIgcnk9IjMiIGZpbGw9IiMxZTFiNGIiLz4KICA8cGF0aCBkPSJNIDc3IDk3IFEgODUgOTQgOTMgOTciIHN0cm9rZT0iIzFjMTkxNyIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNIDEwNyA5NyBRIDExNSA5NCAxMjMgOTciIHN0cm9rZT0iIzFjMTkxNyIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNIDkxIDEzMCBRIDEwMCAxMzcgMTA5IDEzMCIgc3Ryb2tlPSIjYzI0MTBjIiBzdHJva2Utd2lkdGg9IjIuMiIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHJlY3QgeD0iMTIiIHk9IjEyIiB3aWR0aD0iNjAiIGhlaWdodD0iMTgiIHJ4PSI0IiBmaWxsPSJyZ2JhKDE2OCw4NSwyNDcsMC4xNSkiIHN0cm9rZT0icmdiYSgxNjgsODUsMjQ3LDAuNCkiIHN0cm9rZS13aWR0aD0iMSIvPgogIDx0ZXh0IHg9IjQyIiB5PSIyNCIgZmlsbD0iI2MwODRmYyIgZm9udC1zaXplPSI4IiBmb250LWZhbWlseT0iLWFwcGxlLXN5c3RlbSxzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UEFTU1BPUlQgSUQ8L3RleHQ+Cjwvc3ZnPg=="
+    }
+  },
+  "underage_minor": {
+    "decision": "DENIED",
+    "reason": "Underage: Subject age (17) does not meet the minimum requirement of 21.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 17,
+      "age_over_21": false
+    },
+    "trust": {
+      "issuer_authenticated": true,
+      "device_signature_valid": true,
+      "data_integrity": "VERIFIED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.iso.18013.5.1.mDL",
+      "friendly_type": "ISO/IEC 18013-5 mdoc"
+    },
+    "attributes": {
+      "given_name": "Lucas",
+      "family_name": "Miller",
+      "birth_date": "2008-11-20",
+      "expiry_date": "2029-01-10",
+      "issuing_authority": "California DMV",
+      "issuing_country": "USA",
+      "document_number": "CA-D1049281",
+      "age_over_21": false,
+      "portrait": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjQwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI0MCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImxiZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMzYjA3NjQiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJsc2tpbiIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmZWQ3YWEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjZmRiYTc0Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJsaGFpciIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM3ODM1MGYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNDUxYTAzIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJsaG9vZGllIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2UxMWQ0OCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM5ZjEyMzkiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjQwIiByeD0iMTYiIGZpbGw9InVybCgjbGJnKSIvPgogIDxwYXRoIGQ9Ik0gMzAgMjQwIEwgMzAgMjA1IFEgMzAgMTY4IDEwMCAxNjggUSAxNzAgMTY4IDE3MCAyMDUgTCAxNzAgMjQwIFoiIGZpbGw9InVybCgjbGhvb2RpZSkiLz4KICA8cmVjdCB4PSI4NiIgeT0iMTM4IiB3aWR0aD0iMjgiIGhlaWdodD0iMzIiIGZpbGw9InVybCgjbHNraW4pIi8+CiAgPGVsbGlwc2UgY3g9IjEwMCIgY3k9IjEwNSIgcng9IjM5IiByeT0iNDYiIGZpbGw9InVybCgjbHNraW4pIi8+CiAgPHBhdGggZD0iTSA1OCA5OCBRIDYyIDU4IDEwMCA1OCBRIDEzOCA1OCAxNDIgOTggUSAxMzAgNzYgMTAwIDc2IFEgNzAgNzYgNTggOTggWiIgZmlsbD0idXJsKCNsaGFpcikiLz4KICA8ZWxsaXBzZSBjeD0iODYiIGN5PSIxMDYiIHJ4PSI0IiByeT0iMyIgZmlsbD0iIzFlMjkzYiIvPgogIDxlbGxpcHNlIGN4PSIxMTQiIGN5PSIxMDYiIHJ4PSI0IiByeT0iMyIgZmlsbD0iIzFlMjkzYiIvPgogIDxwYXRoIGQ9Ik0gNzggOTggUSA4NiA5NSA5NCA5OCIgc3Ryb2tlPSIjNDUxYTAzIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gMTA2IDk4IFEgMTE0IDk1IDEyMiA5OCIgc3Ryb2tlPSIjNDUxYTAzIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gOTEgMTMwIFEgMTAwIDEzNiAxMDkgMTMwIiBzdHJva2U9IiNjMjQxMGMiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHJlY3QgeD0iMTIiIHk9IjEyIiB3aWR0aD0iNjAiIGhlaWdodD0iMTgiIHJ4PSI0IiBmaWxsPSJyZ2JhKDIzOSw2OCw2OCwwLjE4KSIgc3Ryb2tlPSJyZ2JhKDIzOSw2OCw2OCwwLjQpIiBzdHJva2Utd2lkdGg9IjEiLz4KICA8dGV4dCB4PSI0MiIgeT0iMjQiIGZpbGw9IiNmODcxNzEiIGZvbnQtc2l6ZT0iOCIgZm9udC1mYW1pbHk9Ii1hcHBsZS1zeXN0ZW0sc3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlVOREVSIDIxIElEPC90ZXh0Pgo8L3N2Zz4="
+    }
+  },
+  "expired_document": {
+    "decision": "DENIED",
+    "reason": "Document expired on 2023-06-12.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 36,
+      "age_over_21": true
+    },
+    "trust": {
+      "issuer_authenticated": true,
+      "device_signature_valid": true,
+      "data_integrity": "VERIFIED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.iso.18013.5.1.mDL",
+      "friendly_type": "ISO/IEC 18013-5 mdoc"
+    },
+    "attributes": {
+      "given_name": "Elena",
+      "family_name": "Vance",
+      "birth_date": "1990-06-12",
+      "expiry_date": "2023-06-12",
+      "issuing_authority": "New York DMV",
+      "issuing_country": "USA",
+      "document_number": "NY-4910284",
+      "age_over_21": true,
+      "portrait": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjQwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI0MCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImViZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxZTI5M2IiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJlc2tpbiIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmZWQ3YWEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjZmJjZmU4Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJlaGFpciIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM0NTFhMDMiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWMxOTE3Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJlamFja2V0IiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzA1OTY2OSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwNDc4NTciLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjQwIiByeD0iMTYiIGZpbGw9InVybCgjZWJnKSIvPgogIDxwYXRoIGQ9Ik0gMzAgMjQwIEwgMzAgMjA1IFEgMzAgMTY4IDEwMCAxNjggUSAxNzAgMTY4IDE3MCAyMDUgTCAxNzAgMjQwIFoiIGZpbGw9InVybCgjZWphY2tldCkiLz4KICA8cmVjdCB4PSI4NiIgeT0iMTM4IiB3aWR0aD0iMjgiIGhlaWdodD0iMzIiIGZpbGw9InVybCgjZXNraW4pIi8+CiAgPHBhdGggZD0iTSA1MiAxMDAgUSA0OCAxNTAgNTQgMTg1IFEgMTAwIDE5NSAxNDYgMTg1IFEgMTUyIDE1MCAxNDggMTAwIFoiIGZpbGw9InVybCgjZWhhaXIpIi8+CiAgPGVsbGlwc2UgY3g9IjEwMCIgY3k9IjEwNSIgcng9IjM5IiByeT0iNDgiIGZpbGw9InVybCgjZXNraW4pIi8+CiAgPHBhdGggZD0iTSA1OCA5OCBRIDU4IDU2IDEwMCA1NiBRIDE0MiA1NiAxNDIgOTggUSAxMzAgNjggMTAwIDY4IFEgNzAgNjggNTggOTggWiIgZmlsbD0idXJsKCNlaGFpcikiLz4KICA8ZWxsaXBzZSBjeD0iODYiIGN5PSIxMDYiIHJ4PSI0IiByeT0iMyIgZmlsbD0iIzFlMjkzYiIvPgogIDxlbGxpcHNlIGN4PSIxMTQiIGN5PSIxMDYiIHJ4PSI0IiByeT0iMyIgZmlsbD0iIzFlMjkzYiIvPgogIDxwYXRoIGQ9Ik0gNzggOTggUSA4NiA5NSA5NCA5OCIgc3Ryb2tlPSIjMWMxOTE3IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gMTA2IDk4IFEgMTE0IDk1IDEyMiA5OCIgc3Ryb2tlPSIjMWMxOTE3IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gOTEgMTMwIFEgMTAwIDEzNiAxMDkgMTMwIiBzdHJva2U9IiNkYjI3NzciIHN0cm9rZS13aWR0aD0iMi4yIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cmVjdCB4PSIxMiIgeT0iMTIiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxOCIgcng9IjQiIGZpbGw9InJnYmEoMjQ1LDE1OCwxMSwwLjE4KSIgc3Ryb2tlPSJyZ2JhKDI0NSwxNTgsMTEsMC40KSIgc3Ryb2tlLXdpZHRoPSIxIi8+CiAgPHRleHQgeD0iNDEiIHk9IjI0IiBmaWxsPSIjZmJiZjI0IiBmb250LXNpemU9IjgiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLHN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5FWFBJUkVEIElEPC90ZXh0Pgo8L3N2Zz4="
+    }
+  },
+  "untrusted_issuer": {
+    "decision": "DENIED",
+    "reason": "Issuer authentication failed: Certificate chain is untrusted or invalid.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 31,
+      "age_over_21": true
+    },
+    "trust": {
+      "issuer_authenticated": false,
+      "device_signature_valid": true,
+      "data_integrity": "VERIFIED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.iso.18013.5.1.mDL",
+      "friendly_type": "ISO/IEC 18013-5 mdoc"
+    },
+    "attributes": {
+      "given_name": "John",
+      "family_name": "Smith",
+      "birth_date": "1995-04-10",
+      "expiry_date": "2027-01-01",
+      "issuing_authority": "Unknown Rogue CA",
+      "issuing_country": "ZZ",
+      "document_number": "UNTRUSTED-0912",
+      "age_over_21": true
+    }
+  },
+  "tampered_integrity": {
+    "decision": "DENIED",
+    "reason": "Device authentication failed: MSO signature or device key is unauthorized. Data integrity check failed: Status is TAMPERED. Document expired on 2026-05-10.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 34,
+      "age_over_21": true
+    },
+    "trust": {
+      "issuer_authenticated": true,
+      "device_signature_valid": false,
+      "data_integrity": "TAMPERED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.iso.18013.5.1.mDL",
+      "friendly_type": "ISO/IEC 18013-5 mdoc"
+    },
+    "attributes": {
+      "given_name": "Marcus",
+      "family_name": "Conrad",
+      "birth_date": "1992-09-05",
+      "expiry_date": "2026-05-10",
+      "issuing_authority": "California DMV",
+      "issuing_country": "USA",
+      "document_number": "CA-D9918231",
+      "age_over_21": true
+    }
+  }
+};
+
+  // ── Centralized Test Persona Verification Handler ──────────────────────────
+  // Immediately presents any simulated persona to the Door & Bar Terminal.
+  // Directly renders the authoritative verified pass or denial screen instantly with zero delay.
+  function runTestPersona(scenarioKey) {
+    console.log("[PassGate] Running test persona:", scenarioKey);
+    const outcome = TEST_PERSONAS[scenarioKey];
+    if (!outcome) {
+      console.error("[PassGate] Unknown test persona:", scenarioKey);
+      return;
+    }
+
+    // 1. Halt all active direct polling and set active test persona flag
+    stopDirectPolling();
+    window.isTestPersonaActive = true;
+
+    // 2. Switch to Age Check tab immediately
+    switchTab("verify");
+
+    // 3. Immediately render authoritative verified or denied state
     try {
-      if (!currentDirectSessionId) {
-        await startNewDirectSession();
+      if (outcome.decision === "GRANTED") {
+        renderDirectGranted(outcome);
+        goDirectState("granted");
+      } else {
+        renderDirectDenied(outcome);
+        goDirectState("denied");
       }
-      goDirectState("verifying");
-      if (awaitingStatus) awaitingStatus.textContent = `Evaluating presentation: ${scenarioKey}…`;
-      if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = `Evaluating presentation: ${scenarioKey}…`;
-
-      if (activeTabKey === "qr") {
-        switchTab("verify");
+      if (typeof renderMobileOutcome === "function") {
+        renderMobileOutcome(outcome);
       }
+    } catch (err) {
+      console.error("[PassGate] Error rendering test persona outcome:", err);
+    }
 
-      await api("/mock-payload", {
+    // 4. Instantly scroll to top so result is immediately visible
+    window.scrollTo({ top: 0, behavior: "instant" });
+
+    // Optional background sync to server session (fire-and-forget, non-blocking)
+    if (currentDirectSessionId) {
+      api("/mock-payload", {
         method: "POST",
         body: JSON.stringify({
           session_id: currentDirectSessionId,
           scenario: scenarioKey,
-          delay_ms: 600,
+          delay_ms: 0,
         }),
-      });
-    } catch (err) {
-      console.error("Simulation trigger failed:", err);
+      }).catch(() => {});
     }
   }
+
+  // Backwards compatibility alias
+  function presentTestPersona(scenarioKey) {
+    runTestPersona(scenarioKey);
+  }
+
+  function triggerDirectScenario(scenarioKey) {
+    runTestPersona(scenarioKey);
+  }
+
+  // Expose globally on window so inline onclick handlers and console work 100% reliably
+  window.runTestPersona = runTestPersona;
+  window.presentTestPersona = runTestPersona;
+  window.switchTab = switchTab;
+  window.TEST_PERSONAS = TEST_PERSONAS;
 
   // Direct tab listeners
   if (btnRefreshSession) btnRefreshSession.addEventListener("click", startNewDirectSession);
@@ -592,13 +1317,6 @@
     btnSwitchToQr.addEventListener("click", () => switchTab("qr"));
   }
 
-  // On-card direct-spoof buttons (Explicit Test Profiles)
-  $$("[data-action='direct-spoof']").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const scenario = btn.getAttribute("data-scenario");
-      if (scenario) triggerDirectScenario(scenario);
-    });
-  });
 
   // Verify button on Age Check page (Genuine Apple Wallet / mDL)
   if (btnWalletRedirect) {
@@ -996,9 +1714,9 @@
     $("#modal-order-summary-snippet").innerHTML = `
       <div style="display:flex;justify-content:space-between;margin-bottom:0.35rem;">
         <strong>Table #12 Order (${items.length} items)</strong>
-        <span style="color:var(--accent-cyan);font-weight:700;">$${total.toFixed(2)}</span>
+        <span style="color:var(--text-main);font-weight:700;">$${total.toFixed(2)}</span>
       </div>
-      <div style="color:var(--text-dim);font-size:0.75rem;">
+      <div style="color:var(--text-muted);font-size:0.78rem;">
         ${items.map((i) => `${i.qty}x ${i.name}`).join(" · ")}
       </div>
     `;
@@ -1058,20 +1776,8 @@
     }
   }
 
-  async function triggerMenuSpoof(scenarioKey) {
-    if (!menuSessionId) return;
-    try {
-      await api("/mock-payload", {
-        method: "POST",
-        body: JSON.stringify({
-          session_id: menuSessionId,
-          scenario: scenarioKey,
-          delay_ms: 600,
-        }),
-      });
-    } catch (err) {
-      console.error("Menu spoof trigger error:", err);
-    }
+  function triggerMenuSpoof(scenarioKey) {
+    presentTestPersona(scenarioKey, "menu");
   }
 
   // Modal event listeners
@@ -1159,38 +1865,35 @@
     });
   }
 
-  // Modal spoof buttons
-  $$("[data-action='menu-spoof']").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const scen = btn.getAttribute("data-scenario");
-      if (scen) triggerMenuSpoof(scen);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CENTRALIZED TEST & SIMULATION SUITE CONTROLLER
+  // All simulated personas are consolidated in one dedicated place:
+  // #tab-panel-test ("Test Sandbox")
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Quick navigation helpers between Age Check and Test Suite
+  $("#btn-goto-tests-from-verify")?.addEventListener("click", () => switchTab("test"));
+  $("#btn-goto-terminal-from-test")?.addEventListener("click", () => switchTab("verify"));
+
+  // Target flow switcher radio options
+  $$('input[name="test-target-flow"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      $$(".test-target-option").forEach((opt) => opt.classList.remove("active"));
+      radio.closest(".test-target-option")?.classList.add("active");
     });
   });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PERSISTENT BOTTOM SIMULATOR CONTROLLER DOCK
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Routes spoof triggers to the currently active tab (Direct Verify or Menu Ordering)
-  const simButtons = $$("#sim-buttons .btn-sim");
-  simButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const scenario = btn.getAttribute("data-scenario");
-      if (!scenario) return;
+  // Run Test Persona from the centralized Test Sandbox (supports clicking button or entire card)
+  document.addEventListener("click", (e) => {
+    const trigger = e.target.closest("[data-action='run-suite-test']") || e.target.closest(".test-card");
+    if (!trigger) return;
 
-      if (activeTabKey === "qr" || activeTabKey === "verify") {
-        triggerDirectScenario(scenario);
-      } else if (activeTabKey === "menu") {
-        if (!menuModalOverlay?.classList.contains("active")) {
-          const itemCount = Object.values(menuCart).reduce((a, b) => a + b, 0);
-          if (itemCount === 0) {
-            menuCart = { "single-malt": 1, "wagyu-burger": 1 };
-            updateMenuCartUi();
-          }
-          openMenuCheckoutModal();
-        }
-        triggerMenuSpoof(scenario);
-      }
-    });
+    const scenario = trigger.getAttribute("data-scenario") || trigger.querySelector("[data-scenario]")?.getAttribute("data-scenario");
+    if (!scenario) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    runTestPersona(scenario);
   });
 
   // ── Mobile Patron Presentation Screen (When user scans QR with phone) ────
@@ -1232,11 +1935,11 @@
               const statusDot = $("#mobile-wallet-status-dot");
               if (statusBox) {
                 statusBox.style.display = "flex";
-                statusBox.style.borderColor = "rgba(244,63,94,0.3)";
-                statusBox.style.background = "rgba(244,63,94,0.08)";
+                statusBox.style.borderColor = "var(--status-rose-border)";
+                statusBox.style.background = "var(--status-rose-bg)";
               }
               if (statusText) {
-                statusText.style.color = "#fecdd3";
+                statusText.style.color = "var(--status-rose-text)";
                 statusText.innerHTML = `<strong>Notice:</strong> ${err.message}`;
               }
               if (statusDot) statusDot.style.background = "#f43f5e";
@@ -1253,7 +1956,7 @@
     if (btnToggleTerminal) {
       btnToggleTerminal.onclick = () => {
         mobilePanel.style.display = "none";
-        if (tabsNav) tabsNav.style.display = "flex";
+        if (tabsNav) tabsNav.style.display = "";
         if (simBar) simBar.style.display = "";
         switchTab("verify");
       };
@@ -1268,38 +1971,43 @@
     const outcomeTitle = $("#mobile-outcome-title");
     const outcomeDesc = $("#mobile-outcome-desc");
     const outcomeBadge = $("#mobile-outcome-badge");
+    const mobileSentinelContainer = $("#mobile-sentinel-pass-container");
 
     if (statusBox) statusBox.style.display = "none";
     if (outcomeBox) outcomeBox.style.display = "block";
 
     if (result.decision === "GRANTED") {
-      outcomeBox.style.background = "rgba(16,185,129,0.12)";
-      outcomeBox.style.border = "1px solid rgba(16,185,129,0.3)";
-      if (outcomeIcon) { outcomeIcon.textContent = "🎉"; outcomeIcon.style.color = "#34d399"; }
-      if (outcomeTitle) { outcomeTitle.textContent = "Identity & Age (21+) Verified!"; outcomeTitle.style.color = "#34d399"; }
+      outcomeBox.style.background = "var(--status-emerald-bg)";
+      outcomeBox.style.border = "1.5px solid var(--status-emerald-border)";
+      if (outcomeIcon) { outcomeIcon.textContent = "🎉"; outcomeIcon.style.color = "var(--status-emerald-text)"; }
+      if (outcomeTitle) { outcomeTitle.textContent = "Identity & Age (21+) Verified!"; outcomeTitle.style.color = "var(--status-emerald-text)"; }
       if (outcomeDesc) outcomeDesc.textContent = "Your digital ID was cryptographically verified. The terminal has granted access.";
       if (outcomeBadge) { outcomeBadge.className = "trust-badge valid"; outcomeBadge.textContent = "✓ Verified via Apple Wallet"; }
+
+      // Mount interactive anti-spoof Sentinel Pass for patron to show bouncer
+      if (mobileSentinelContainer) {
+        renderSentinelPass(mobileSentinelContainer, result, "mobile");
+      }
     } else {
-      outcomeBox.style.background = "rgba(244,63,94,0.12)";
-      outcomeBox.style.border = "1px solid rgba(244,63,94,0.3)";
-      if (outcomeIcon) { outcomeIcon.textContent = "✕"; outcomeIcon.style.color = "#fb7185"; }
-      if (outcomeTitle) { outcomeTitle.textContent = "Verification Issue"; outcomeTitle.style.color = "#fb7185"; }
+      outcomeBox.style.background = "var(--status-rose-bg)";
+      outcomeBox.style.border = "1.5px solid var(--status-rose-border)";
+      if (outcomeIcon) { outcomeIcon.textContent = "✕"; outcomeIcon.style.color = "var(--status-rose-text)"; }
+      if (outcomeTitle) { outcomeTitle.textContent = "Verification Issue"; outcomeTitle.style.color = "var(--status-rose-text)"; }
       if (outcomeDesc) outcomeDesc.textContent = result.reason || "Customer does not meet legal drinking age requirements (21+).";
       if (outcomeBadge) { outcomeBadge.className = "trust-badge invalid"; outcomeBadge.textContent = "✕ Age Under 21"; }
+
+      destroySentinelPass("mobile");
+      if (mobileSentinelContainer) {
+        mobileSentinelContainer.innerHTML = "";
+        mobileSentinelContainer.style.display = "none";
+      }
     }
   }
 
-  // Mobile spoof test persona buttons (Explicitly marked for demo testing)
-  $$("[data-action='mobile-spoof']").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const scenario = btn.getAttribute("data-scenario");
-      if (scenario) triggerDirectScenario(scenario);
-    });
-  });
-
   // ── Session Initialization by Tab ─────────────────────────────────────────
   function ensureTabSession(tabKey) {
-    if ((tabKey === "qr" || tabKey === "verify") && !currentDirectSessionId) {
+    if (window.isTestPersonaActive) return;
+    if ((tabKey === "qr" || tabKey === "verify" || tabKey === "test") && !currentDirectSessionId) {
       startNewDirectSession();
     }
   }
@@ -1342,7 +2050,7 @@
 
     // Normal terminal kiosk boot
     const hash = window.location.hash.replace("#", "").toLowerCase();
-    if (["qr", "verify", "menu"].includes(hash)) {
+    if (["qr", "verify", "menu", "test"].includes(hash)) {
       switchTab(hash);
     } else {
       switchTab("qr");
