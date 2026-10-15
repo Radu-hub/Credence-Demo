@@ -728,9 +728,28 @@
                     </div>
                     <span class="btn-wallet-arrow">➔</span>
                   </button>
+                </div>
 
                 <!-- Menu Wallet Feedback / Alert message -->
                 <div id="menu-wallet-feedback" class="terminal-feedback-box" style="display:none;">
+                </div>
+
+                <!-- One-Click Demo Test Personas for Immediate Menu Drink Order Confirmation -->
+                <div class="menu-modal-test-personas" style="margin: 0.75rem 0; padding: 0.85rem; background: var(--bg-subtle); border: 1px dashed var(--border-slate-300); border-radius: 12px;">
+                  <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.55rem; display: flex; align-items: center; justify-content: space-between;">
+                    <span style="display:flex;align-items:center;gap:0.35rem;">🧪 One-Click Demo Test Personas</span>
+                    <span style="font-size:0.68rem;font-weight:600;color:var(--status-emerald-text);background:rgba(16,185,129,0.12);border:1px solid var(--status-emerald-border);padding:2px 6px;border-radius:4px;">No iPhone Required</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <button type="button" class="btn-demo-preset preset-adult" id="btn-modal-test-adult" style="min-height: 48px; padding: 0.55rem 0.75rem; border-radius: 8px; font-size: 0.8rem; text-align: left; display: flex; flex-direction: column; justify-content: center; cursor: pointer; border: 1px solid var(--status-emerald-border); background: var(--status-emerald-bg);">
+                      <span style="font-weight: 700; color: var(--status-emerald-text);">🟢 21+ Adult (Pass)</span>
+                      <span style="font-size: 0.7rem; color: #047857;">See Drink Confirmed Screen</span>
+                    </button>
+                    <button type="button" class="btn-demo-preset preset-minor" id="btn-modal-test-minor" style="min-height: 48px; padding: 0.55rem 0.75rem; border-radius: 8px; font-size: 0.8rem; text-align: left; display: flex; flex-direction: column; justify-content: center; cursor: pointer; border: 1px solid var(--status-rose-border); background: var(--status-rose-bg);">
+                      <span style="font-weight: 700; color: var(--status-rose-text);">⚠️ Under-21 (Block)</span>
+                      <span style="font-size: 0.7rem; color: #9f1239;">See Order Blocked Screen</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Expandable Companion Phone QR Scanner for 2nd Device Testing -->
@@ -882,6 +901,10 @@
                   <span>⚡ Present Adult ID</span>
                   <span>➔</span>
                 </button>
+                <button type="button" class="btn-test-launch-sub" onclick="event.stopPropagation(); window.runTestPersona('adult_verified', 'menu')" style="margin-top:0.4rem;background:rgba(16,185,129,0.12);color:var(--status-emerald-text);border:1px solid var(--status-emerald-border);border-radius:6px;padding:6px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;">
+                  <span>🍸 Order Drinks at Table (Confirm Order)</span>
+                  <span>➔</span>
+                </button>
               </div>
 
               <!-- Persona 2: Valid Digital Passport -->
@@ -1000,6 +1023,30 @@
                 <p class="test-card-desc">Simulates standard industry workaround mocking PassKit response handlers with decrypted org.iso.18013.5.1 structural test data.</p>
                 <button type="button" class="btn-test-launch pass" onclick="window.runTestPersona('passkit_mock')" data-action="run-suite-test" data-scenario="passkit_mock">
                   <span>⚡ Present PassKit Mock</span>
+                  <span>➔</span>
+                </button>
+                <button type="button" class="btn-test-launch-sub" onclick="event.stopPropagation(); window.runTestPersona('passkit_mock', 'menu')" style="margin-top:0.4rem;background:rgba(16,185,129,0.12);color:var(--status-emerald-text);border:1px solid var(--status-emerald-border);border-radius:6px;padding:6px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;">
+                  <span>🍸 Order Drinks at Table (Confirm Order)</span>
+                  <span>➔</span>
+                </button>
+              </div>
+
+              <!-- Persona 8: Table Order Drink Verification (Order Confirmed Screen) -->
+              <div class="test-card pass" onclick="window.runTestPersona('menu_drink_order_confirmed', 'menu')" data-action="run-suite-test" data-scenario="menu_drink_order_confirmed" data-target-context="menu" style="cursor: pointer; border: 2px solid var(--status-emerald-border); background: linear-gradient(180deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.05) 100%);">
+                <div class="test-card-top">
+                  <div class="test-card-status-badge pass">✓ EXPECTED: ORDER CONFIRMED</div>
+                  <span class="test-card-icon">🍸</span>
+                </div>
+                <h3 class="test-card-name">Table Order: Drink Confirmed (21+)</h3>
+                <div class="test-card-meta">
+                  <div class="meta-item"><span>Context:</span> <strong>Table #12 Menu Checkout</strong></div>
+                  <div class="meta-item"><span>Cart Items:</span> <strong style="color:var(--status-emerald-text);">Single Malt Scotch + Old Fashioned</strong></div>
+                  <div class="meta-item"><span>Verification:</span> <strong>Apple Wallet 21+ Verified (Pass)</strong></div>
+                  <div class="meta-item"><span>Target View:</span> <strong style="color:var(--status-emerald-text);">🎉 Order Placed &amp; Receipt Screen</strong></div>
+                </div>
+                <p class="test-card-desc">Simulates ordering 21+ alcoholic cocktails at Table #12 with an authenticated Apple Wallet mobile driver's license. Shows the live Drink Order Confirmed screen with itemized receipt.</p>
+                <button type="button" class="btn-test-launch pass" onclick="window.runTestPersona('menu_drink_order_confirmed', 'menu')" data-action="run-suite-test" data-scenario="menu_drink_order_confirmed" data-target-context="menu">
+                  <span>🍸 Order Drinks &amp; View Confirmed Screen</span>
                   <span>➔</span>
                 </button>
               </div>

@@ -1398,22 +1398,31 @@
 };
 
 TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
+TEST_PERSONAS.menu_drink_order_confirmed = {
+  ...TEST_PERSONAS.adult_verified,
+  menuContext: true
+};
 
   // ── Centralized Test Persona Verification Handler ──────────────────────────
-  // Immediately presents any simulated persona to the Door & Bar Terminal.
+  // Immediately presents any simulated persona to the Door & Bar Terminal or Table Order.
   // Directly renders the authoritative verified pass or denial screen instantly with zero delay.
   function runTestPersona(scenarioKey, targetContext = null) {
     console.log("[PassGate] Running test persona:", scenarioKey, "context:", targetContext);
-    const outcome = TEST_PERSONAS[scenarioKey];
-    if (!outcome) {
-      console.error("[PassGate] Unknown test persona:", scenarioKey);
+
+    // If targeted at Table Order / Menu modal or menu_drink_order_confirmed scenario
+    if (targetContext === "menu" || scenarioKey === "menu_drink_order_confirmed" || scenarioKey.startsWith("menu_")) {
+      const outcome = TEST_PERSONAS[scenarioKey] || TEST_PERSONAS.adult_verified;
+      if (outcome && outcome.decision === "GRANTED") {
+        confirmDrinkOrderWithPersona(outcome);
+      } else {
+        rejectDrinkOrderWithPersona(outcome);
+      }
       return;
     }
 
-    // If triggered from Table Order / Menu modal, complete the order verification right in the modal
-    if (targetContext === "menu") {
-      stopMenuPolling();
-      handleMenuVerificationOutcome(outcome);
+    const outcome = TEST_PERSONAS[scenarioKey];
+    if (!outcome) {
+      console.error("[PassGate] Unknown test persona:", scenarioKey);
       return;
     }
 
@@ -1468,6 +1477,8 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
   // Expose globally on window so inline onclick handlers and console work 100% reliably
   window.runTestPersona = runTestPersona;
   window.presentTestPersona = runTestPersona;
+  window.confirmDrinkOrderWithPersona = confirmDrinkOrderWithPersona;
+  window.rejectDrinkOrderWithPersona = rejectDrinkOrderWithPersona;
   window.switchTab = switchTab;
   window.TEST_PERSONAS = TEST_PERSONAS;
 
@@ -1739,20 +1750,14 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
   const btnPresetMenuFood  = $("#btn-preset-menu-food");
 
   if (btnPresetMenuAdult) {
-    btnPresetMenuAdult.addEventListener("click", async () => {
-      menuCart = { "single-malt": 1, "old-fashioned": 1, "wagyu-burger": 1 };
-      updateMenuCartUi();
-      openMenuCheckoutModal();
-      await triggerMenuSpoof("adult_verified");
+    btnPresetMenuAdult.addEventListener("click", () => {
+      confirmDrinkOrderWithPersona(TEST_PERSONAS.adult_verified);
     });
   }
 
   if (btnPresetMenuMinor) {
-    btnPresetMenuMinor.addEventListener("click", async () => {
-      menuCart = { "hazy-ipa": 2, "truffle-fries": 1 };
-      updateMenuCartUi();
-      openMenuCheckoutModal();
-      await triggerMenuSpoof("underage_minor");
+    btnPresetMenuMinor.addEventListener("click", () => {
+      rejectDrinkOrderWithPersona(TEST_PERSONAS.underage_minor);
     });
   }
 
@@ -1946,8 +1951,58 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
     }
   }
 
+  function confirmDrinkOrderWithPersona(outcome = null) {
+    stopMenuPolling();
+    switchTab("menu");
+
+    const hasDrinks = Object.entries(menuCart).some(([id, qty]) => {
+      const item = menuCatalog[id];
+      return item && item.is21 && qty > 0;
+    });
+
+    if (!hasDrinks) {
+      menuCart = { "single-malt": 1, "old-fashioned": 1, "wagyu-burger": 1 };
+      updateMenuCartUi();
+    }
+
+    const verifiedResult = outcome || TEST_PERSONAS.adult_verified;
+    executeOrderConfirmation("digital", verifiedResult);
+  }
+
+  function rejectDrinkOrderWithPersona(outcome = null) {
+    stopMenuPolling();
+    switchTab("menu");
+
+    const hasDrinks = Object.entries(menuCart).some(([id, qty]) => {
+      const item = menuCatalog[id];
+      return item && item.is21 && qty > 0;
+    });
+
+    if (!hasDrinks) {
+      menuCart = { "hazy-ipa": 2, "truffle-fries": 1 };
+      updateMenuCartUi();
+    }
+
+    if (!menuModalOverlay) return;
+    modalViewGate.style.display = "none";
+    modalViewConfirmed.style.display = "none";
+    modalViewBlocked.style.display = "block";
+
+    const blockedReasonEl = $("#modal-blocked-reason");
+    if (blockedReasonEl) {
+      blockedReasonEl.textContent = "There was an issue verifying your digital ID for the alcoholic beverage(s) in your cart. You may remove restricted items to place your food order, or ask your server for assistance at Table #12.";
+    }
+
+    menuModalOverlay.classList.add("active");
+  }
+
   function triggerMenuSpoof(scenarioKey) {
-    presentTestPersona(scenarioKey, "menu");
+    const outcome = TEST_PERSONAS[scenarioKey] || TEST_PERSONAS.adult_verified;
+    if (outcome && outcome.decision === "GRANTED") {
+      confirmDrinkOrderWithPersona(outcome);
+    } else {
+      rejectDrinkOrderWithPersona(outcome);
+    }
   }
 
   // Modal event listeners
@@ -2013,9 +2068,17 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
     });
   });
 
-  // Dedicated demo fallback button
+  // Dedicated demo fallback buttons
   $("#btn-menu-simulate-wallet")?.addEventListener("click", () => {
-    triggerMenuSpoof("adult_verified");
+    confirmDrinkOrderWithPersona(TEST_PERSONAS.adult_verified);
+  });
+
+  $("#btn-modal-test-adult")?.addEventListener("click", () => {
+    confirmDrinkOrderWithPersona(TEST_PERSONAS.adult_verified);
+  });
+
+  $("#btn-modal-test-minor")?.addEventListener("click", () => {
+    rejectDrinkOrderWithPersona(TEST_PERSONAS.underage_minor);
   });
 
   const btnToggleMenuQr = $("#btn-toggle-menu-qr");
@@ -2054,10 +2117,14 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
     const scenario = trigger.getAttribute("data-scenario") || trigger.querySelector("[data-scenario]")?.getAttribute("data-scenario");
     if (!scenario) return;
 
+    const targetContext = trigger.getAttribute("data-target-context") || 
+                          trigger.querySelector("[data-target-context]")?.getAttribute("data-target-context") || 
+                          (scenario.includes("menu") ? "menu" : null);
+
     e.preventDefault();
     e.stopPropagation();
 
-    runTestPersona(scenario);
+    runTestPersona(scenario, targetContext);
   });
 
   // ── Mobile Patron Presentation Screen (When user scans QR with phone) ────
