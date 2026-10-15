@@ -34,7 +34,7 @@ function getSessionMap() {
  */
 async function handleAuthOptions(req, res) {
   try {
-    const requestedId = req.query.sessionId || req.body?.sessionId || req.query.session_id || req.body?.session_id;
+    const requestedId = req.query?.sessionId || req.body?.sessionId || req.query?.session_id || req.body?.session_id;
     const sessionId = requestedId || uuidv4();
 
     console.log(`[WalletRouter] Generating auth-options for session ${sessionId}...`);
@@ -58,6 +58,8 @@ async function handleAuthOptions(req, res) {
         sessionId,
         protocol: "org-iso-mdoc",
         targetElement: "age_over_21",
+        hasDeviceRequest: Boolean(deviceRequest),
+        hasEncryptionInfo: Boolean(encryptionInfo),
         deviceRequest,
         encryptionInfo,
         readerAuthSigned: Boolean(liveDcRequest.isLiveSigned),
