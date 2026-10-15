@@ -1,8 +1,45 @@
+# Dependencies
 node_modules/
+
+# Environment Variables & Secrets
 .env
-.DS_Store
-*.log
-*.cer
+.env.*
+!.env.example
+*.env
+
+# Cryptographic Keys, Certificates & Credentials
+*.pem
+*.key
 *.p12
+*.pfx
+*.cer
+*.crt
+*.der
 certs/*.pem
+certs/*.key
+certs/*.p12
+certs/*.cer
+certs/*.crt
+certs/*.der
+certs/iaca/*
 !certs/README.md
+!certs/iaca/.gitkeep
+
+# System & Editor Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs & Runtime Diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
