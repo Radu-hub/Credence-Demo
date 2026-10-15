@@ -1238,8 +1238,40 @@
       "document_number": "CA-D9918231",
       "age_over_21": true
     }
+  },
+  "passkit_mock": {
+    "decision": "GRANTED",
+    "reason": "Identity verified & policy requirements satisfied.",
+    "policy": {
+      "min_age": 21,
+      "computed_age": 56,
+      "age_over_21": true
+    },
+    "trust": {
+      "issuer_authenticated": true,
+      "device_signature_valid": true,
+      "data_integrity": "VERIFIED",
+      "digest_algorithm": "SHA-256"
+    },
+    "document": {
+      "type": "org.iso.18013.5.1.mDL",
+      "friendly_type": "PassKit Mock mDL (ISO/IEC 18013-5)"
+    },
+    "attributes": {
+      "given_name": "John",
+      "family_name": "Doe",
+      "birth_date": "1970-01-01",
+      "expiry_date": "2030-01-01",
+      "issuing_authority": "Apple Wallet Mock PassKit",
+      "issuing_country": "USA",
+      "document_number": "PK-19700101-JD",
+      "age_over_21": true,
+      "portrait": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjQwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI0MCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImpiZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJqc2tpbiIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmNWQwYjUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjZTBiMDhjIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJqaGFpciIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2NDc0OGIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNDc1NTY5Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJqc2hpcnQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDI4NGM3Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzNjlhMSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyNDAiIHJ4PSIxNiIgZmlsbD0idXJsKCNqYmcpIi8+CiAgPHBhdGggZD0iTSAzMCAyNDAgTCAzMCAyMDUgUSAzMCAxNjggMTAwIDE2OCBRIDE3MCAxNjggMTcwIDIwNSBMIDE3MCAyNDAgWiIgZmlsbD0idXJsKCNqc2hpcnQpIi8+CiAgPHJlY3QgeD0iODUiIHk9IjEzOCIgd2lkdGg9IjMwIiBoZWlnaHQ9IjMyIiBmaWxsPSJ1cmwoI2pza2luKSIvPgogIDxlbGxpcHNlIGN4PSIxMDAiIGN5PSIxMDQiIHJ4PSI0MiIgcnk9IjUwIiBmaWxsPSJ1cmwoI2pza2luKSIvPgogIDxwYXRoIGQ9Ik0gNTggMTAwIFEgNTYgNTggMTAwIDU4IFEgMTQ0IDU4IDE0MiAxMDAgUSAxMzAgNzQgMTAwIDc0IFEgNzAgNzQgNTggMTAwIFoiIGZpbGw9InVybCgjamhhaXIpIi8+CiAgPGVsbGlwc2UgY3g9Ijg1IiBjeT0iMTA1IiByeD0iNCIgcnk9IjMiIGZpbGw9IiMxZTI5M2IiLz4KICA8ZWxsaXBzZSBjeD0iMTE1IiBjeT0iMTA1IiByeD0iNCIgcnk9IjMiIGZpbGw9IiMxZTI5M2IiLz4KICA8cGF0aCBkPSJNIDc3IDk3IFEgODUgOTQgOTMgOTciIHN0cm9rZT0iIzQ3NTU2OSIgc3Ryb2tlLXdpZHRoPSIyLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gMTA3IDk3IFEgMTE1IDk0IDEyMyA5NyIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjIuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTSAxMDAgMTAzIEwgOTcgMTE4IEwgMTAzIDExOCIgc3Ryb2tlPSIjYzk5MjZiIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gOTAgMTMwIFEgMTAwIDEzNyAxMTAgMTMwIiBzdHJva2U9IiNiMDcwNDgiIHN0cm9rZS13aWR0aD0iMi41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cmVjdCB4PSIxMiIgeT0iMTIiIHdpZHRoPSI2OCIgaGVpZ2h0PSIxOCIgcng9IjQiIGZpbGw9InJnYmEoMTYsMTg1LDEyOSwwLjE1KSIgc3Ryb2tlPSJyZ2JhKDE2LDE4NSwxMjksMC40KSIgc3Ryb2tlLXdpZHRoPSIxIi8+CiAgPHRleHQgeD0iNDYiIHk9IjI0IiBmaWxsPSIjMTBiOTgxIiBmb250LXNpemU9IjgiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLHN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5QQVNTS0lUIE1PQ0s8L3RleHQ+Cjwvc3ZnPg=="
+    }
   }
 };
+
+TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
 
   // ── Centralized Test Persona Verification Handler ──────────────────────────
   // Immediately presents any simulated persona to the Door & Bar Terminal.

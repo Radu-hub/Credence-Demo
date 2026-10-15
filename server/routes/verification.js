@@ -321,7 +321,12 @@ router.post("/verify-doc", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    const payload = data || credential || walletResponse;
+    let payload = data || credential || walletResponse;
+    if (!payload && req.body && typeof req.body === "object") {
+      if (req.body["org.iso.18013.5.1"]) {
+        payload = req.body;
+      }
+    }
     if (!payload) {
       return res.status(400).json({ error: "No credential data provided" });
     }

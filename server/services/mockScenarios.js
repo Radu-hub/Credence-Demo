@@ -156,6 +156,44 @@ const PORTRAIT_ELENA =
 </svg>`
   ).toString("base64");
 
+const PORTRAIT_JOHN =
+  "data:image/svg+xml;base64," +
+  Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240">
+  <defs>
+    <linearGradient id="jbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="jskin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5d0b5"/>
+      <stop offset="100%" stop-color="#e0b08c"/>
+    </linearGradient>
+    <linearGradient id="jhair" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+    <linearGradient id="jshirt" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="240" rx="16" fill="url(#jbg)"/>
+  <path d="M 30 240 L 30 205 Q 30 168 100 168 Q 170 168 170 205 L 170 240 Z" fill="url(#jshirt)"/>
+  <rect x="85" y="138" width="30" height="32" fill="url(#jskin)"/>
+  <ellipse cx="100" cy="104" rx="42" ry="50" fill="url(#jskin)"/>
+  <path d="M 58 100 Q 56 58 100 58 Q 144 58 142 100 Q 130 74 100 74 Q 70 74 58 100 Z" fill="url(#jhair)"/>
+  <ellipse cx="85" cy="105" rx="4" ry="3" fill="#1e293b"/>
+  <ellipse cx="115" cy="105" rx="4" ry="3" fill="#1e293b"/>
+  <path d="M 77 97 Q 85 94 93 97" stroke="#475569" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 107 97 Q 115 94 123 97" stroke="#475569" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 100 103 L 97 118 L 103 118" stroke="#c9926b" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 90 130 Q 100 137 110 130" stroke="#b07048" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <rect x="12" y="12" width="68" height="18" rx="4" fill="rgba(16,185,129,0.15)" stroke="rgba(16,185,129,0.4)" stroke-width="1"/>
+  <text x="46" y="24" fill="#10b981" font-size="8" font-family="-apple-system,system-ui,sans-serif" font-weight="700" text-anchor="middle">PASSKIT MOCK</text>
+</svg>`
+  ).toString("base64");
+
 const MOCK_SCENARIOS = {
   adult_verified: {
     id: "adult_verified",
@@ -412,7 +450,63 @@ const MOCK_SCENARIOS = {
       },
     },
   },
+
+  passkit_mock: {
+    id: "passkit_mock",
+    name: "Apple Wallet PassKit Mock (John Doe, Age 56)",
+    description: "Industry-standard PassKit #if DEBUG mock payload replicating raw org.iso.18013.5.1 decrypted structure.",
+    payload: {
+      docType: "org.iso.18013.5.1.mDL",
+      "org.iso.18013.5.1": {
+        given_name: "John",
+        family_name: "Doe",
+        birth_date: "1970-01-01",
+        age_over_21: true,
+        document_number: "PK-19700101-JD",
+        issuing_authority: "Apple Wallet / ISO 18013-5 Mock Provider",
+        issuing_country: "USA",
+        portrait: PORTRAIT_JOHN,
+      },
+      issuerSigned: {
+        nameSpaces: {
+          "org.iso.18013.5.1": {
+            given_name: "John",
+            family_name: "Doe",
+            birth_date: "1970-01-01",
+            issue_date: "2020-01-01",
+            expiry_date: "2030-01-01",
+            issuing_authority: "Apple Wallet / ISO 18013-5 Mock Provider",
+            issuing_country: "USA",
+            document_number: "PK-19700101-JD",
+            age_over_21: true,
+            portrait: PORTRAIT_JOHN,
+          },
+        },
+        issuerAuth: {
+          certificate_issuer: "C=US, O=Apple Inc., OU=Apple Wallet PassKit, CN=PassKit Mock Issuing Authority Root",
+          algorithm: "ES256",
+          signature_valid: true,
+        },
+      },
+      deviceSigned: {
+        deviceAuth: {
+          algorithm: "ES256",
+          device_key_authorized: true,
+          signature_valid: true,
+        },
+      },
+      trust: {
+        issuer_authenticated: true,
+        device_signature_valid: true,
+        data_integrity: "VERIFIED",
+        digest_algorithm: "SHA-256",
+      },
+    },
+  },
 };
+
+// Convenient alias for Apple Wallet PassKit mock scenario
+MOCK_SCENARIOS.apple_wallet_mock = MOCK_SCENARIOS.passkit_mock;
 
 module.exports = {
   MOCK_SCENARIOS,

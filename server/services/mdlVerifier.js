@@ -423,10 +423,26 @@ function extractMdlAttributes(rawPayload, sessionId = null) {
       } else {
         break;
       }
-    } else if (payload.credential !== undefined && typeof payload.credential === "object") {
-      payload = payload.credential;
-    } else if (payload.walletResponse !== undefined && typeof payload.walletResponse === "object") {
-      payload = payload.walletResponse;
+    } else if (payload.credential !== undefined) {
+      if (typeof payload.credential === "string") {
+        const parsed = parseStringPayload(payload.credential);
+        if (parsed && typeof parsed === "object") payload = parsed;
+        else break;
+      } else if (typeof payload.credential === "object") {
+        payload = payload.credential;
+      } else {
+        break;
+      }
+    } else if (payload.walletResponse !== undefined) {
+      if (typeof payload.walletResponse === "string") {
+        const parsed = parseStringPayload(payload.walletResponse);
+        if (parsed && typeof parsed === "object") payload = parsed;
+        else break;
+      } else if (typeof payload.walletResponse === "object") {
+        payload = payload.walletResponse;
+      } else {
+        break;
+      }
     } else {
       break;
     }
@@ -520,6 +536,17 @@ function extractMdlAttributes(rawPayload, sessionId = null) {
   }
   if (payload?.nameSpaces) {
     harvestNamespaces(payload.nameSpaces);
+  }
+
+  // Also harvest recognized namespace containers directly on payload (e.g. PassKit decrypted structure { "org.iso.18013.5.1": { ... } })
+  const directNamespaceContainer = {};
+  for (const [k, v] of Object.entries(payload || {})) {
+    if (v && typeof v === "object" && (k.includes(".") || RECOGNIZED_NAMESPACES.includes(k))) {
+      directNamespaceContainer[k] = v;
+    }
+  }
+  if (Object.keys(directNamespaceContainer).length > 0) {
+    harvestNamespaces(directNamespaceContainer);
   }
 
   // 2. Inspect multi-document arrays (ISO 18013-5 DeviceResponse documents)
@@ -820,12 +847,20 @@ function extractMdlAttributes(rawPayload, sessionId = null) {
  * Extracts trust and security metadata from the payload.
  */
 function extractTrustInfo(rawPayload) {
-  if (rawPayload?.trust && typeof rawPayload.trust === "object") {
-    return rawPayload.trust;
+  let payload = rawPayload;
+  if (typeof payload === "string") {
+    try {
+      const parsed = JSON.parse(payload.trim());
+      if (parsed && typeof parsed === "object") payload = parsed;
+    } catch (_) {}
   }
 
-  const issuerValid = rawPayload?.issuerSigned?.issuerAuth?.signature_valid ?? true;
-  const deviceValid = rawPayload?.deviceSigned?.deviceAuth?.signature_valid ?? true;
+  if (payload?.trust && typeof payload.trust === "object") {
+    return payload.trust;
+  }
+
+  const issuerValid = payload?.issuerSigned?.issuerAuth?.signature_valid ?? true;
+  const deviceValid = payload?.deviceSigned?.deviceAuth?.signature_valid ?? true;
 
   return {
     issuer_authenticated: issuerValid,
