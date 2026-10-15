@@ -117,8 +117,11 @@ app.use(
   })
 );
 
+const walletRoutes = require("./routes/wallet");
+
 // ── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api/verification", verificationRoutes);
+app.use("/api/wallet", walletRoutes);
 
 // ── Health Check ─────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {

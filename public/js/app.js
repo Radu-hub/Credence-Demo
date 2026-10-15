@@ -106,7 +106,8 @@
 
   // ── Common API Request Helper ─────────────────────────────────────────────
   async function api(path, opts = {}) {
-    const res = await fetch(`/api/verification${path}`, {
+    const url = path.startsWith("/api/") ? path : `/api/verification${path}`;
+    const res = await fetch(url, {
       headers: {
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true",
@@ -114,7 +115,16 @@
       },
       ...opts,
     });
-    if (!res.ok) throw new Error(`API ${res.status}`);
+    if (!res.ok) {
+      let errText = "";
+      try {
+        const errJson = await res.json();
+        errText = errJson.error || errJson.message || JSON.stringify(errJson);
+      } catch (_) {
+        errText = await res.text();
+      }
+      throw new Error(`API ${res.status}: ${errText}`);
+    }
     return res.json();
   }
 
@@ -911,7 +921,7 @@
     }
   }
 
-  // ── True Apple Wallet Verification Engine (W3C Digital Credentials API) ───
+  // ── True Apple Wallet Verification Engine (W3C Digital Credentials API / ISO 18013-7) ───
   async function executeAppleWalletVerification(sessionObj, callbacks = {}) {
     const { onStatus, onCompleted, onError } = callbacks;
 
@@ -921,30 +931,62 @@
       throw err;
     }
 
-    // Refresh session data if dcRequest is missing
     let targetSession = sessionObj;
-    if (!targetSession.dcRequest) {
-      try {
-        targetSession = await api(`/session/${sessionObj.id}`);
-      } catch (_) {}
+
+    // 1. Fetch freshly signed ISO 18013-7 request & anti-replay nonce from /api/wallet/auth-options
+    let authOptions = null;
+    try {
+      console.log(`[PassGate] Requesting Apple Wallet auth-options for session ${targetSession.id}...`);
+      authOptions = await api(`/api/wallet/auth-options?sessionId=${encodeURIComponent(targetSession.id)}`);
+      console.log("[PassGate] Received Apple Wallet auth-options:", authOptions);
+    } catch (authErr) {
+      console.warn("[PassGate] Could not fetch /api/wallet/auth-options, falling back to session dcRequest:", authErr.message);
+      if (!targetSession.dcRequest) {
+        try {
+          targetSession = await api(`/session/${sessionObj.id}`);
+        } catch (_) {}
+      }
+      authOptions = targetSession.dcRequest || targetSession.authOptions;
+      if (!authOptions) {
+        const err = new Error("Failed to load Apple Wallet request options: " + authErr.message);
+        if (onError) onError(err);
+        throw err;
+      }
     }
 
-    const dcReq = targetSession.dcRequest;
-    if (!dcReq) {
-      const err = new Error("Digital credential request definition is missing from session.");
-      if (onError) onError(err);
-      throw err;
-    }
+    const deviceRequest = authOptions.deviceRequest;
+    const encryptionInfo = authOptions.encryptionInfo;
+    const nonce = authOptions.nonce;
 
-    const protocol = dcReq.protocol || "org-iso-mdoc";
-    const deviceRequest = dcReq.deviceRequest;
-    const encryptionInfo = dcReq.encryptionInfo;
+    const requestData = {
+      deviceRequest,
+      encryptionInfo,
+      nonce,
+    };
 
-    const requestItem = {
-      protocol,
-      data: {
-        deviceRequest,
-        encryptionInfo,
+    // W3C Digital Credentials API with ISO 18013-7 protocol binding
+    const credentialRequest = {
+      mediation: "required",
+      digital: {
+        // Modern W3C Digital Credentials specification (providers array)
+        providers: [
+          {
+            protocol: "iso18013-7",
+            request: requestData,
+            data: requestData,
+          },
+        ],
+        // Requests fallback array for Safari / WebKit preview variations
+        requests: [
+          {
+            protocol: "iso18013-7",
+            data: requestData,
+          },
+          {
+            protocol: "org-iso-mdoc",
+            data: requestData,
+          },
+        ],
       },
     };
 
@@ -958,26 +1000,37 @@
 
     console.log(`[PassGate] Checking Apple Wallet API support: credentials.get=${hasCredentialsGet}, identity.get=${hasIdentityGet}`);
 
+    if (!hasCredentialsGet && !hasIdentityGet) {
+      const unsupportedErr = new Error(
+        "The W3C Digital Credentials API is not supported in this browser. " +
+        "Please use Safari on iOS 18+ (or macOS Sequoia with iPhone mirroring), or scan the desktop QR code with your iPhone camera."
+      );
+      if (onError) onError(unsupportedErr);
+      throw unsupportedErr;
+    }
+
     let credential = null;
     let lastError = null;
 
-    // 1. Primary WebKit path: navigator.credentials.get({ mediation: "required", digital: { requests: [requestItem] } })
+    // 1. Primary W3C path: navigator.credentials.get({ mediation: "required", digital: { providers: [...] } })
     if (hasCredentialsGet) {
       try {
-        console.log("[PassGate] Invoking navigator.credentials.get({ mediation: 'required', digital: ... })");
-        credential = await navigator.credentials.get({
-          mediation: "required",
-          digital: {
-            requests: [requestItem],
-          },
-        });
+        console.log("[PassGate] Invoking navigator.credentials.get({ mediation: 'required', digital: { providers: [{ protocol: 'iso18013-7' }] } })");
+        credential = await navigator.credentials.get(credentialRequest);
         console.log("[PassGate] navigator.credentials.get resolved successfully:", credential);
       } catch (err1) {
         console.warn("[PassGate] Primary credentials.get error:", err1.name, err1.message);
         lastError = err1;
 
         // If user explicitly dismissed or canceled Face ID / Apple Wallet sheet:
-        if (err1.name === "AbortError" || err1.name === "NotAllowedError" || err1.message?.includes("aborted") || err1.message?.includes("canceled") || err1.message?.includes("dismissed")) {
+        if (
+          err1.name === "AbortError" ||
+          err1.name === "NotAllowedError" ||
+          err1.message?.toLowerCase().includes("aborted") ||
+          err1.message?.toLowerCase().includes("canceled") ||
+          err1.message?.toLowerCase().includes("cancelled") ||
+          err1.message?.toLowerCase().includes("dismissed")
+        ) {
           const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
           if (onError) onError(cancelErr);
           throw cancelErr;
@@ -986,11 +1039,8 @@
         // Try without mediation parameter
         try {
           console.log("[PassGate] Trying navigator.credentials.get without mediation parameter...");
-          credential = await navigator.credentials.get({
-            digital: {
-              requests: [requestItem],
-            },
-          });
+          const unmediatedRequest = { digital: credentialRequest.digital };
+          credential = await navigator.credentials.get(unmediatedRequest);
           console.log("[PassGate] Secondary credentials.get resolved successfully:", credential);
         } catch (err2) {
           console.warn("[PassGate] Secondary credentials.get error:", err2.name, err2.message);
@@ -999,19 +1049,22 @@
       }
     }
 
-    // 2. Fallback path: navigator.identity.get({ digital: { requests: [requestItem] } })
+    // 2. Fallback path: navigator.identity.get({ digital: { providers: [...] } })
     if (!credential && hasIdentityGet) {
       try {
-        console.log("[PassGate] Invoking navigator.identity.get({ digital: ... })");
-        credential = await navigator.identity.get({
-          digital: {
-            requests: [requestItem],
-          },
-        });
+        console.log("[PassGate] Invoking navigator.identity.get fallback...");
+        credential = await navigator.identity.get(credentialRequest);
         console.log("[PassGate] navigator.identity.get resolved successfully:", credential);
       } catch (idErr) {
         console.warn("[PassGate] navigator.identity.get error:", idErr.name, idErr.message);
-        if (idErr.name === "AbortError" || idErr.name === "NotAllowedError" || idErr.message?.includes("aborted") || idErr.message?.includes("canceled") || idErr.message?.includes("dismissed")) {
+        if (
+          idErr.name === "AbortError" ||
+          idErr.name === "NotAllowedError" ||
+          idErr.message?.toLowerCase().includes("aborted") ||
+          idErr.message?.toLowerCase().includes("canceled") ||
+          idErr.message?.toLowerCase().includes("cancelled") ||
+          idErr.message?.toLowerCase().includes("dismissed")
+        ) {
           const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
           if (onError) onError(cancelErr);
           throw cancelErr;
@@ -1022,7 +1075,7 @@
 
     // 3. Process credential returned by Apple Wallet
     if (credential) {
-      if (onStatus) onStatus("verifying", "Cryptographically validating credential presentation…");
+      if (onStatus) onStatus("verifying", "Cryptographically validating credential presentation & IACA root…");
 
       let payloadData = null;
       if (credential.data) {
@@ -1033,30 +1086,29 @@
         payloadData = credential;
       }
 
-      console.log("[PassGate] Sending Apple Wallet payload to server verification endpoint...");
-      const verifyRes = await api("/verify-doc", {
+      console.log("[PassGate] Sending Apple Wallet payload to /api/wallet/verify endpoint...");
+      const verifyRes = await api("/api/wallet/verify", {
         method: "POST",
         body: JSON.stringify({
-          sessionId: targetSession.id,
-          data: payloadData,
+          sessionId: authOptions.sessionId || targetSession.id,
+          credential: payloadData,
         }),
       });
 
-      console.log("[PassGate] Server verification response:", verifyRes);
-      if (onCompleted) onCompleted(verifyRes.result);
-      return verifyRes.result;
+      console.log("[PassGate] /api/wallet/verify response:", verifyRes);
+      const outcome = verifyRes.result || verifyRes;
+      if (onCompleted) onCompleted(outcome);
+      return outcome;
     }
 
     // 4. If neither returned a credential:
-    // IMPORTANT: NEVER navigate to custom URI schemes (like mdoc-openid4vp://) in Safari,
-    // as Safari will display "Safari cannot open the page because the address is invalid".
-    const reasonDetail = lastError ? `${lastError.name}: ${lastError.message}` : "W3C Digital Credentials API is not supported or not enabled in this browser.";
+    const reasonDetail = lastError ? `${lastError.name}: ${lastError.message}` : "W3C Digital Credentials API did not return a credential.";
     const helpfulMsg = `Could not invoke Apple Wallet (${reasonDetail}). ` +
-      `Ensure you are in Safari on an iPhone with iOS 17.5+ or iOS 18+, or tap a Test Persona below for instant demonstration.`;
+      `Ensure you are in Safari on an iPhone with iOS 18+ and a mobile driver's license in Apple Wallet.`;
 
-    const unsupportedErr = new Error(helpfulMsg);
-    if (onError) onError(unsupportedErr);
-    throw unsupportedErr;
+    const failureErr = new Error(helpfulMsg);
+    if (onError) onError(failureErr);
+    throw failureErr;
   }
 
   // ── Pre-Computed Test Personas for Direct Demonstration ─────────────────

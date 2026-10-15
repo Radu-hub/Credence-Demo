@@ -13,6 +13,7 @@ const QRCode = require("qrcode");
 const { MOCK_SCENARIOS } = require("../services/mockScenarios");
 const { verifyMdlPresentation } = require("../services/mdlVerifier");
 const credenceClient = require("../services/credenceClient");
+const appleWalletService = require("../services/appleWalletService");
 
 const router = express.Router();
 
@@ -196,9 +197,16 @@ router.post("/session", async (req, res) => {
   }
   const qrDataUrl = await generateQrDataUrl(mobileVerifyUrl);
 
-  // Generate Apple Wallet Document Request (W3C Digital Credentials API: org-iso-mdoc)
-  const docReqInfo = await credenceClient.getDocRequest(sessionId, req);
-  const dcRequest = docReqInfo.dcRequest;
+  // Generate Apple Wallet Document Request (W3C Digital Credentials API: iso18013-7)
+  const authOptions = appleWalletService.generateAuthOptions(sessionId, { req });
+  const dcRequest = {
+    protocol: "iso18013-7",
+    deviceRequest: authOptions.deviceRequest,
+    encryptionInfo: authOptions.encryptionInfo,
+    nonce: authOptions.nonce,
+    targetElement: "age_over_21",
+    digital: authOptions.digital,
+  };
 
   // ── 1. Pure Mock Mode (if explicitly requested via USE_MOCK=true) ─────────
   if (isMock()) {
@@ -353,11 +361,16 @@ router.post("/verify-doc", async (req, res) => {
     }
 
     // 2. Perform cryptographic & policy verification
-    const verificationInput = verifiedAttributes
-      ? { attributes: verifiedAttributes, trust: trustInfo }
-      : payload;
-
-    const result = verifyMdlPresentation(verificationInput, getMinAge(), targetId);
+    let result = null;
+    try {
+      result = await appleWalletService.verifyWalletResponse(targetId, payload);
+    } catch (appleErr) {
+      console.warn("[POST /verify-doc] AppleWalletService note:", appleErr.message);
+      const verificationInput = verifiedAttributes
+        ? { attributes: verifiedAttributes, trust: trustInfo }
+        : payload;
+      result = verifyMdlPresentation(verificationInput, getMinAge(), targetId);
+    }
 
     session.status = "completed";
     session.result = result;
@@ -625,5 +638,9 @@ router.get("/callback", async (req, res) => {
 });
 
 router.resolveRequestOrigin = resolveRequestOrigin;
+router.sessions = sessions;
+router.getLastActiveSessionId = () => lastActiveSessionId;
+router.setLastActiveSessionId = (id) => { lastActiveSessionId = id; };
+router.clearSessionTimers = clearSessionTimers;
 
 module.exports = router;
