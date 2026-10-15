@@ -27,15 +27,21 @@ class AppleCertManager {
   static toDer(pemOrDer) {
     if (!pemOrDer) return Buffer.alloc(0);
     if (Buffer.isBuffer(pemOrDer)) {
-      // Check if buffer contains ASCII PEM header
       const str = pemOrDer.toString("utf8");
       if (str.includes("-----BEGIN")) {
-        const b64 = str.replace(/-----[A-Z0-9 ]+-----/g, "").replace(/\s+/g, "");
-        return Buffer.from(b64, "base64");
+        const match = str.match(/-----BEGIN [^-]*CERTIFICATE-----([^-]+)-----END [^-]*CERTIFICATE-----/);
+        if (match) {
+          return Buffer.from(match[1].replace(/\s+/g, ""), "base64");
+        }
+      } else {
+        return pemOrDer;
       }
-      return pemOrDer;
     }
     if (typeof pemOrDer === "string") {
+      const match = pemOrDer.match(/-----BEGIN [^-]*CERTIFICATE-----([^-]+)-----END [^-]*CERTIFICATE-----/);
+      if (match) {
+        return Buffer.from(match[1].replace(/\s+/g, ""), "base64");
+      }
       const b64 = pemOrDer.replace(/-----[A-Z0-9 ]+-----/g, "").replace(/\s+/g, "");
       return Buffer.from(b64, "base64");
     }

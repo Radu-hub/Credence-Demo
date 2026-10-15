@@ -9,12 +9,14 @@
 const crypto = require("crypto");
 const cbor = require("./cborEncoder");
 const appleCertManager = require("./appleCertManager");
+const mdlVerifier = require("./mdlVerifier");
 
 class AppleWalletService {
   /**
    * Generates authorization options for the W3C Digital Credentials API (protocol: "iso18013-7").
    *
-   * Requests ONLY the privacy-preserving `age_over_21` boolean attribute (intentToRetain: false).
+   * Requests standard mDL elements matching state DMV issuance (e.g. California DMV)
+   * while enforcing zero retention (intentToRetain: false).
    *
    * @param {string} sessionId - Verification session UUID
    * @param {Object} [options]
@@ -38,12 +40,18 @@ class AppleWalletService {
     const creds = appleCertManager.getReaderCredentials();
 
     // 4. Build ISO 18013-5 / 18013-7 DeviceRequest
-    // PRIVACY ENFORCEMENT: Request ONLY age_over_21 (no birth_date, name, or address)
+    // Request standard minimal claims matching state DMV mDL profiles so Apple Wallet presents sheet
+    const dataElements = options.dataElements || {
+      age_over_21: false,
+      birth_date: false,
+      family_name: false,
+      given_name: false,
+      issuing_authority: false,
+    };
+
     const deviceRequestCbor = cbor.buildDeviceRequest({
       docType: "org.iso.18013.5.1.mDL",
-      dataElements: {
-        age_over_21: false, // intentToRetain = false
-      },
+      dataElements,
       readerCert: creds.certDer,
       readerKey: creds.key,
       passphrase: creds.passphrase,
@@ -78,14 +86,17 @@ class AppleWalletService {
             data: requestData,
           },
         ],
-        // Backward-compatible fallback for WebKit & Chromium preview implementations
+        // WebKit (Safari on iOS 18+) requires protocol "org-iso-mdoc" inside requests
         requests: [
           {
-            protocol: "iso18013-7",
-            data: requestData,
+            protocol: "org-iso-mdoc",
+            data: {
+              deviceRequest: deviceRequestBase64url,
+              encryptionInfo: encryptionInfoBase64url,
+            },
           },
           {
-            protocol: "org-iso-mdoc",
+            protocol: "iso18013-7",
             data: requestData,
           },
         ],
@@ -278,27 +289,50 @@ class AppleWalletService {
       }
     }
 
-    // Recursive search helper to locate age_over_21 claim across varying wrapper structures
-    function findAgeOver21InObject(obj) {
+    // Recursive search helper to locate specific claims across varying wrapper structures
+    function findClaimInObject(obj, key) {
       if (!obj || typeof obj !== "object") return null;
-      if (obj.age_over_21 !== undefined) return Boolean(obj.age_over_21);
-      if (obj.age_over_21_or_older !== undefined) return Boolean(obj.age_over_21_or_older);
+      if (obj[key] !== undefined && obj[key] !== null) return obj[key];
       for (const val of Object.values(obj)) {
         if (val && typeof val === "object") {
-          const res = findAgeOver21InObject(val);
+          const res = findClaimInObject(val, key);
           if (res !== null) return res;
         }
       }
       return null;
     }
 
-    // Also check root payload attributes if present (e.g. from simulator, wrappers, or normalized adapter)
+    // Check root payload attributes if present (e.g. from simulator, wrappers, or normalized adapter)
     if (ageOver21Claim === null) {
-      const deepFound = findAgeOver21InObject(payload) ?? findAgeOver21InObject(deviceResponse);
+      const deepFound = findClaimInObject(payload, "age_over_21") ??
+        findClaimInObject(payload, "age_over_21_or_older") ??
+        findClaimInObject(deviceResponse, "age_over_21") ??
+        findClaimInObject(deviceResponse, "age_over_21_or_older");
       if (deepFound !== null) {
-        ageOver21Claim = deepFound;
+        ageOver21Claim = deepFound === true || deepFound === "true" || deepFound === 1;
       }
     }
+
+    // If age_over_21 boolean was not directly returned, derive it from birth_date (e.g. California DMV mDL)
+    const birthDateClaim = rawClaimsFound.birth_date ||
+      findClaimInObject(payload, "birth_date") ||
+      findClaimInObject(deviceResponse, "birth_date");
+
+    let computedAge = null;
+    if (birthDateClaim) {
+      computedAge = mdlVerifier.calculateAge(birthDateClaim);
+      if (computedAge !== null && ageOver21Claim === null) {
+        ageOver21Claim = computedAge >= 21;
+      }
+    }
+
+    const givenNameClaim = rawClaimsFound.given_name ||
+      findClaimInObject(payload, "given_name") ||
+      findClaimInObject(deviceResponse, "given_name");
+
+    const familyNameClaim = rawClaimsFound.family_name ||
+      findClaimInObject(payload, "family_name") ||
+      findClaimInObject(deviceResponse, "family_name");
 
     // 8. Policy Evaluation
     const isOver21 = ageOver21Claim === true;
@@ -319,10 +353,14 @@ class AppleWalletService {
       reason = "Issuer root certificate is not recognized by trusted State DMV IACA authority list.";
     } else if (isOver21) {
       decision = "GRANTED";
-      reason = "Age 21+ confirmed via Apple Wallet mobile driver's license.";
+      reason = computedAge !== null
+        ? `Age 21+ confirmed (${computedAge} years old) via Apple Wallet mobile driver's license.`
+        : "Age 21+ confirmed via Apple Wallet mobile driver's license.";
     } else if (isExplicitlyUnder21) {
       decision = "DENIED";
-      reason = "Customer does not meet the legal drinking age of 21.";
+      reason = computedAge !== null
+        ? `Customer is ${computedAge} years old and does not meet the legal drinking age of 21.`
+        : "Customer does not meet the legal drinking age of 21.";
     } else {
       // Element was not returned or false
       decision = "DENIED";
@@ -347,11 +385,15 @@ class AppleWalletService {
       },
       attributes: {
         age_over_21: isOver21,
-        issuing_authority: issuerValidation.issuer || "State DMV",
+        birth_date: birthDateClaim || undefined,
+        given_name: givenNameClaim || undefined,
+        family_name: familyNameClaim || undefined,
+        issuing_authority: issuerValidation.issuer || rawClaimsFound.issuing_authority || "State DMV",
       },
       policy: {
         required_threshold: 21,
         claimed_over_21: ageOver21Claim,
+        computed_age: computedAge !== null ? computedAge : (isOver21 ? "21+" : null),
         decision,
       },
       trust: {

@@ -2,3 +2,7 @@ node_modules/
 .env
 .DS_Store
 *.log
+*.cer
+*.p12
+certs/*.pem
+!certs/README.md

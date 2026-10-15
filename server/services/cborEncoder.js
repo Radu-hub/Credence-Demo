@@ -212,15 +212,23 @@ function encodeEmbedded(value) {
 
 // Helper to convert PEM string or Buffer to DER Buffer for COSE x5chain
 function pemToDer(pem) {
+  if (!pem) return Buffer.alloc(0);
   if (Buffer.isBuffer(pem)) {
     const str = pem.toString("utf8");
     if (str.includes("-----BEGIN")) {
-      const b64 = str.replace(/-----[A-Z0-9 ]+-----/g, "").replace(/\s+/g, "");
-      return Buffer.from(b64, "base64");
+      const match = str.match(/-----BEGIN [^-]*CERTIFICATE-----([^-]+)-----END [^-]*CERTIFICATE-----/);
+      if (match) {
+        return Buffer.from(match[1].replace(/\s+/g, ""), "base64");
+      }
+    } else {
+      return pem;
     }
-    return pem;
   }
   if (typeof pem === "string") {
+    const match = pem.match(/-----BEGIN [^-]*CERTIFICATE-----([^-]+)-----END [^-]*CERTIFICATE-----/);
+    if (match) {
+      return Buffer.from(match[1].replace(/\s+/g, ""), "base64");
+    }
     const b64 = pem.replace(/-----[A-Z0-9 ]+-----/g, "").replace(/\s+/g, "");
     return Buffer.from(b64, "base64");
   }
@@ -245,7 +253,7 @@ function pemToDer(pem) {
  *
  * @param {Object} options
  * @param {string} [options.docType]
- * @param {Object} [options.dataElements] - mDL data elements to request (defaults to age_over_21 only)
+ * @param {Object} [options.dataElements] - mDL data elements to request
  * @param {Buffer|string} [options.readerCert] - Optional Apple Reader cert (X.509 DER or PEM)
  * @param {KeyObject|string} [options.readerKey] - Optional private key for ReaderAuth signing
  * @param {string} [options.passphrase] - Optional key passphrase
@@ -254,10 +262,15 @@ function pemToDer(pem) {
 function buildDeviceRequest(options = {}) {
   const docType = options.docType || "org.iso.18013.5.1.mDL";
 
-  // Target Data Element: We request ONLY age_over_21 to preserve user privacy (no birth_date or address)
-  // intentToRetain: false (we do not retain after verification)
+  // Standard mDL elements (intentToRetain = false).
+  // Includes birth_date, name, and issuing_authority so all state mDLs (e.g. California DMV)
+  // match the document request and fire Apple Wallet prompt (matching main branch technique).
   const requestedElements = options.dataElements || {
     age_over_21: false,
+    birth_date: false,
+    family_name: false,
+    given_name: false,
+    issuing_authority: false,
   };
 
   // ItemsRequest CBOR (embedded in a bstr via Tag 24)
@@ -272,40 +285,53 @@ function buildDeviceRequest(options = {}) {
     itemsRequest: new CborTag(24, itemsRequestCbor),
   };
 
-  // If Apple Reader Authentication credentials are provided, attach ReaderAuth (ISO 18013-5 Section 9.1.4)
+  // If Apple Reader Authentication credentials are provided, verify key compatibility (ISO 18013-5 Section 9.1.4)
   if (options.readerCert && options.readerKey) {
     try {
-      // In COSE ES256, signature is 64-byte raw IEEE P1363 format (r || s)
-      const signer = crypto.createSign("SHA256");
-      signer.update(itemsRequestCbor);
-      const signOpts = {
-        key: options.readerKey,
-        dsaEncoding: "ieee-p1363",
-      };
-      if (options.passphrase) {
-        signOpts.passphrase = options.passphrase;
+      let keyObj = null;
+      try {
+        keyObj = crypto.createPrivateKey(options.readerKey);
+      } catch (_) {}
+
+      // ISO 18013-5 mdoc Reader Authentication strictly requires EC P-256 with ES256 (alg -7)
+      if (keyObj && keyObj.asymmetricKeyType === "ec") {
+        const signer = crypto.createSign("SHA256");
+        signer.update(itemsRequestCbor);
+        const signOpts = {
+          key: options.readerKey,
+          dsaEncoding: "ieee-p1363",
+        };
+        if (options.passphrase) {
+          signOpts.passphrase = options.passphrase;
+        }
+        const signature = signer.sign(signOpts);
+
+        // x5chain in COSE header must be DER byte strings (bstr)
+        const certDer = pemToDer(options.readerCert);
+
+        // COSE_Sign1 structure: [protected, unprotected, payload, signature]
+        // Protected header map { 1: -7 } (alg: ES256)
+        const protectedHeader = encode(new Map([[1, -7]]));
+        const unprotectedHeader = new Map([
+          [33, [certDer]], // Label 33 is x5chain in RFC 9360
+          ["x5chain", [certDer]],
+        ]);
+
+        docRequest.readerAuth = [
+          protectedHeader,
+          unprotectedHeader,
+          null, // detached payload
+          signature,
+        ];
+        console.log("[cborEncoder] Attached valid EC P-256 ReaderAuth signature to DeviceRequest.");
+      } else {
+        console.log(
+          `[cborEncoder] Reader key type is ${keyObj?.asymmetricKeyType || "unknown"} (ISO 18013-5 requires EC P-256 for mdoc ReaderAuth). ` +
+          `Omitting readerAuth to allow standard Apple Wallet presentation (matching main branch).`
+        );
       }
-      const signature = signer.sign(signOpts);
-
-      // x5chain in COSE header must be DER byte strings (bstr)
-      const certDer = pemToDer(options.readerCert);
-
-      // COSE_Sign1 structure: [protected, unprotected, payload, signature]
-      // Protected header map { 1: -7 } (alg: ES256)
-      const protectedHeader = encode(new Map([[1, -7]]));
-      const unprotectedHeader = new Map([
-        [33, [certDer]], // Label 33 is x5chain in RFC 9360
-        ["x5chain", [certDer]],
-      ]);
-
-      docRequest.readerAuth = [
-        protectedHeader,
-        unprotectedHeader,
-        null, // detached payload
-        signature,
-      ];
     } catch (authErr) {
-      console.warn("[cborEncoder] ReaderAuth signing failed:", authErr.message);
+      console.warn("[cborEncoder] ReaderAuth signing skipped:", authErr.message);
     }
   }
 

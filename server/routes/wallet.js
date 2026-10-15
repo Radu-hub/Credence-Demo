@@ -13,6 +13,7 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const appleWalletService = require("../services/appleWalletService");
 const appleCertManager = require("../services/appleCertManager");
+const credenceClient = require("../services/credenceClient");
 const verificationRouter = require("./verification");
 
 const router = express.Router();
@@ -26,11 +27,9 @@ function getSessionMap() {
  * ─────────────────────────────────────────────────────────────────────────────
  * GET & POST /api/wallet/auth-options
  *
- * Builds a cryptographically signed request payload using our Apple Identity
- * Access Certificate and private key material, incorporating an anti-replay
- * nonce and HPKE encryption parameters.
- *
- * Requests ONLY the age_over_21 boolean attribute to preserve user privacy.
+ * Builds a cryptographically signed request payload using live Credence Cloud SDK
+ * (when available via ngrok) or our Apple Identity Access Certificate and private key
+ * material with HPKE encryption parameters.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 async function handleAuthOptions(req, res) {
@@ -40,7 +39,51 @@ async function handleAuthOptions(req, res) {
 
     console.log(`[WalletRouter] Generating auth-options for session ${sessionId}...`);
 
-    const authOptions = appleWalletService.generateAuthOptions(sessionId, { req });
+    let liveDcRequest = null;
+    try {
+      const docReqInfo = await credenceClient.getDocRequest(sessionId, req);
+      if (docReqInfo && docReqInfo.dcRequest && docReqInfo.dcRequest.deviceRequest) {
+        liveDcRequest = docReqInfo.dcRequest;
+        console.log(`[WalletRouter] Obtained live-signed Apple Wallet docRequest from Credence Cloud for session ${sessionId}`);
+      }
+    } catch (liveErr) {
+      console.log(`[WalletRouter] Credence getDocRequest note:`, liveErr.message);
+    }
+
+    let authOptions = null;
+    if (liveDcRequest) {
+      const deviceRequest = liveDcRequest.deviceRequest;
+      const encryptionInfo = liveDcRequest.encryptionInfo;
+      authOptions = {
+        sessionId,
+        protocol: "org-iso-mdoc",
+        targetElement: "age_over_21",
+        deviceRequest,
+        encryptionInfo,
+        readerAuthSigned: Boolean(liveDcRequest.isLiveSigned),
+        isLiveSigned: Boolean(liveDcRequest.isLiveSigned),
+        digital: {
+          requests: [
+            {
+              protocol: "org-iso-mdoc",
+              data: {
+                deviceRequest,
+                encryptionInfo,
+              },
+            },
+            {
+              protocol: "iso18013-7",
+              data: {
+                deviceRequest,
+                encryptionInfo,
+              },
+            },
+          ],
+        },
+      };
+    } else {
+      authOptions = appleWalletService.generateAuthOptions(sessionId, { req });
+    }
 
     // Ensure session is tracked in PassGate session store
     const sessions = getSessionMap();
@@ -65,11 +108,12 @@ async function handleAuthOptions(req, res) {
 
     session.authOptions = authOptions;
     session.dcRequest = {
-      protocol: "iso18013-7",
+      protocol: "org-iso-mdoc",
       deviceRequest: authOptions.deviceRequest,
       encryptionInfo: authOptions.encryptionInfo,
       nonce: authOptions.nonce,
       targetElement: "age_over_21",
+      digital: authOptions.digital,
     };
 
     return res.json(authOptions);

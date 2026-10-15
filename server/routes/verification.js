@@ -197,16 +197,57 @@ router.post("/session", async (req, res) => {
   }
   const qrDataUrl = await generateQrDataUrl(mobileVerifyUrl);
 
-  // Generate Apple Wallet Document Request (W3C Digital Credentials API: iso18013-7)
-  const authOptions = appleWalletService.generateAuthOptions(sessionId, { req });
-  const dcRequest = {
-    protocol: "iso18013-7",
-    deviceRequest: authOptions.deviceRequest,
-    encryptionInfo: authOptions.encryptionInfo,
-    nonce: authOptions.nonce,
-    targetElement: "age_over_21",
-    digital: authOptions.digital,
-  };
+  // Generate Apple Wallet Document Request (W3C Digital Credentials API: org-iso-mdoc)
+  // Queries live Credence Cloud SDK when accessible via ngrok, and falls back to local ISO 18013-7 service for localhost
+  let docReqInfo = null;
+  try {
+    docReqInfo = await credenceClient.getDocRequest(sessionId, req);
+  } catch (err) {
+    console.warn(`[POST /session] Credence getDocRequest note:`, err.message);
+  }
+
+  let dcRequest = null;
+  if (docReqInfo && docReqInfo.dcRequest && docReqInfo.dcRequest.deviceRequest) {
+    const deviceRequest = docReqInfo.dcRequest.deviceRequest;
+    const encryptionInfo = docReqInfo.dcRequest.encryptionInfo;
+    dcRequest = {
+      protocol: "org-iso-mdoc",
+      deviceRequest,
+      encryptionInfo,
+      isLiveSigned: Boolean(docReqInfo.isLiveSigned),
+      sessionId,
+      digital: {
+        requests: [
+          {
+            protocol: "org-iso-mdoc",
+            data: {
+              deviceRequest,
+              encryptionInfo,
+            },
+          },
+          {
+            protocol: "iso18013-7",
+            data: {
+              deviceRequest,
+              encryptionInfo,
+            },
+          },
+        ],
+      },
+    };
+  } else {
+    const authOptions = appleWalletService.generateAuthOptions(sessionId, { req });
+    dcRequest = {
+      protocol: "org-iso-mdoc",
+      deviceRequest: authOptions.deviceRequest,
+      encryptionInfo: authOptions.encryptionInfo,
+      nonce: authOptions.nonce,
+      targetElement: "age_over_21",
+      digital: authOptions.digital,
+      isLiveSigned: false,
+      sessionId,
+    };
+  }
 
   // ── 1. Pure Mock Mode (if explicitly requested via USE_MOCK=true) ─────────
   if (isMock()) {

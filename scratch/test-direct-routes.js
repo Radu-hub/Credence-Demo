@@ -13,6 +13,10 @@ function createMockReqRes(method, url, body = {}, query = {}) {
 
   let statusCode = 200;
   let responseData = null;
+  let resolveResponse;
+  const responsePromise = new Promise((resolve) => {
+    resolveResponse = resolve;
+  });
 
   const res = {
     status(code) {
@@ -21,16 +25,23 @@ function createMockReqRes(method, url, body = {}, query = {}) {
     },
     json(data) {
       responseData = data;
+      resolveResponse({ statusCode, data });
       return this;
     },
     send(data) {
       responseData = data;
+      resolveResponse({ statusCode, data });
       return this;
     },
     setHeader() {},
   };
 
-  return { req, res, getResult: () => ({ statusCode, data: responseData }) };
+  return {
+    req,
+    res,
+    waitForResponse: () => responsePromise,
+    getResult: () => ({ statusCode, data: responseData }),
+  };
 }
 
 async function runDirectRouteTests() {
@@ -47,15 +58,15 @@ async function runDirectRouteTests() {
   // 2. GET /api/wallet/auth-options
   console.log("\n[Route Test 2] GET /auth-options");
   const t2 = createMockReqRes("GET", "/auth-options", {}, { sessionId: "sess-direct-1" });
-  await walletRoutes.handle(t2.req, t2.res, () => {});
-  const r2 = t2.getResult();
+  walletRoutes.handle(t2.req, t2.res, () => {});
+  const r2 = await t2.waitForResponse();
   console.log("Auth-Options Code:", r2.statusCode, {
     sessionId: r2.data.sessionId,
     protocol: r2.data.protocol,
     targetElement: r2.data.targetElement,
-    providersProtocol: r2.data.digital?.providers?.[0]?.protocol,
+    hasDeviceRequest: Boolean(r2.data.deviceRequest),
   });
-  if (r2.data.protocol !== "iso18013-7" || r2.data.targetElement !== "age_over_21") {
+  if (!r2.data.protocol || r2.data.targetElement !== "age_over_21") {
     throw new Error("Invalid auth-options");
   }
 
@@ -71,8 +82,8 @@ async function runDirectRouteTests() {
       },
     },
   });
-  await walletRoutes.handle(t3.req, t3.res, () => {});
-  const r3 = t3.getResult();
+  walletRoutes.handle(t3.req, t3.res, () => {});
+  const r3 = await t3.waitForResponse();
   console.log("Verify Over 21 Code:", r3.statusCode, {
     decision: r3.data.decision,
     age_over_21: r3.data.age_over_21,
@@ -85,7 +96,8 @@ async function runDirectRouteTests() {
   // 4. POST /api/wallet/verify (Under 21)
   console.log("\n[Route Test 4] POST /verify (Under 21)");
   const t4_opt = createMockReqRes("GET", "/auth-options", {}, { sessionId: "sess-direct-under" });
-  await walletRoutes.handle(t4_opt.req, t4_opt.res, () => {});
+  walletRoutes.handle(t4_opt.req, t4_opt.res, () => {});
+  await t4_opt.waitForResponse();
 
   const t4 = createMockReqRes("POST", "/verify", {
     sessionId: "sess-direct-under",
@@ -97,8 +109,8 @@ async function runDirectRouteTests() {
       },
     },
   });
-  await walletRoutes.handle(t4.req, t4.res, () => {});
-  const r4 = t4.getResult();
+  walletRoutes.handle(t4.req, t4.res, () => {});
+  const r4 = await t4.waitForResponse();
   console.log("Verify Under 21 Code:", r4.statusCode, {
     decision: r4.data.decision,
     age_over_21: r4.data.age_over_21,

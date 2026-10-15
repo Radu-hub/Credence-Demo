@@ -287,6 +287,38 @@
   let currentDirectSessionData = null;
   let directPollTimer = null;
 
+  // ── Apple Wallet Pre-Fetched Auth Options Cache ──────────────────────────
+  // Pre-fetching prevents Safari's NotAllowedError by removing the async network gap
+  // between the user's tap gesture and navigator.credentials.get().
+  let cachedWalletOptions = null;
+  const walletOptionsCache = new Map();
+
+  async function prefetchWalletAuthOptions(targetSessionId) {
+    const sid = targetSessionId || currentDirectSessionId;
+    if (!sid) {
+      console.log("[PassGate] Skipping Apple Wallet auth-options prefetch (no active session ID yet).");
+      return null;
+    }
+
+    try {
+      console.log(`[PassGate] Pre-fetching Apple Wallet auth-options for session ${sid}...`);
+      const options = await api(`/api/wallet/auth-options?sessionId=${encodeURIComponent(sid)}`);
+      if (options && options.deviceRequest) {
+        walletOptionsCache.set(sid, options);
+        cachedWalletOptions = options;
+        console.log(`[PassGate] Pre-fetched Apple Wallet auth-options successfully for session ${sid}:`, {
+          sessionId: options.sessionId,
+          noncePrefix: options.nonce ? options.nonce.substring(0, 8) : "",
+          readerAuthSigned: options.readerAuthSigned,
+        });
+      }
+      return options;
+    } catch (err) {
+      console.warn(`[PassGate] Failed to pre-fetch Apple Wallet auth-options for session ${sid}:`, err.message);
+      return null;
+    }
+  }
+
   function goDirectState(stateName) {
     Object.values(directStates).forEach((s) => s && s.classList.remove("active"));
     if (directStates[stateName]) {
@@ -319,6 +351,15 @@
       const session = await api("/session", { method: "POST" });
       currentDirectSessionId = session.id;
       currentDirectSessionData = session;
+
+      // Seed cache synchronously from session.dcRequest if present
+      if (session.dcRequest) {
+        const initial = { sessionId: session.id, ...session.dcRequest };
+        walletOptionsCache.set(session.id, initial);
+        cachedWalletOptions = initial;
+      }
+      // Pre-fetch fresh signed ISO 18013-7 auth options in background
+      prefetchWalletAuthOptions(session.id);
 
       const targetOrigin = resolveTargetOrigin(session);
       let qrTargetUrl = `${targetOrigin}/verify?session_id=${encodeURIComponent(session.id)}`;
@@ -931,62 +972,57 @@
       throw err;
     }
 
-    let targetSession = sessionObj;
+    const targetSession = sessionObj;
+    const targetSessionId = targetSession.id;
 
-    // 1. Fetch freshly signed ISO 18013-7 request & anti-replay nonce from /api/wallet/auth-options
-    let authOptions = null;
-    try {
-      console.log(`[PassGate] Requesting Apple Wallet auth-options for session ${targetSession.id}...`);
-      authOptions = await api(`/api/wallet/auth-options?sessionId=${encodeURIComponent(targetSession.id)}`);
-      console.log("[PassGate] Received Apple Wallet auth-options:", authOptions);
-    } catch (authErr) {
-      console.warn("[PassGate] Could not fetch /api/wallet/auth-options, falling back to session dcRequest:", authErr.message);
-      if (!targetSession.dcRequest) {
-        try {
-          targetSession = await api(`/session/${sessionObj.id}`);
-        } catch (_) {}
-      }
-      authOptions = targetSession.dcRequest || targetSession.authOptions;
-      if (!authOptions) {
-        const err = new Error("Failed to load Apple Wallet request options: " + authErr.message);
-        if (onError) onError(err);
-        throw err;
-      }
+    // 1. Retrieve pre-fetched authentication options SYNCHRONOUSLY
+    // CRITICAL REQUIREMENT: NO `await` statements may precede navigator.credentials.get()!
+    // Any async gap will cause Safari to drop the transient user-activation context and throw NotAllowedError.
+    let authOptions = walletOptionsCache.get(targetSessionId) ||
+      (cachedWalletOptions && (cachedWalletOptions.sessionId === targetSessionId || !cachedWalletOptions.sessionId) ? cachedWalletOptions : null) ||
+      cachedWalletOptions ||
+      targetSession.dcRequest ||
+      targetSession.authOptions;
+
+    if (!authOptions) {
+      console.warn("[PassGate] No pre-fetched Apple Wallet auth-options ready synchronously for session:", targetSessionId);
+      prefetchWalletAuthOptions(targetSessionId);
+      const notReadyErr = new Error("Apple Wallet authorization is preparing. Please tap 'Verify with Apple Wallet' again.");
+      if (onError) onError(notReadyErr);
+      throw notReadyErr;
     }
+
+    // Invalidate consumed single-use options from cache so stale nonce cannot be reused
+    if (authOptions.sessionId) {
+      walletOptionsCache.delete(authOptions.sessionId);
+    }
+    if (cachedWalletOptions === authOptions) {
+      cachedWalletOptions = null;
+    }
+
+    console.log("[PassGate] Using pre-fetched Apple Wallet auth-options synchronously:", {
+      sessionId: authOptions.sessionId,
+      noncePrefix: authOptions.nonce ? authOptions.nonce.substring(0, 8) : "",
+      hasDigital: Boolean(authOptions.digital),
+    });
 
     const deviceRequest = authOptions.deviceRequest;
     const encryptionInfo = authOptions.encryptionInfo;
-    const nonce = authOptions.nonce;
 
-    const requestData = {
-      deviceRequest,
-      encryptionInfo,
-      nonce,
+    // Use exact WebKit / iOS 18 format that succeeds in main branch:
+    // protocol "org-iso-mdoc" inside digital.requests array
+    const requestItem = {
+      protocol: "org-iso-mdoc",
+      data: {
+        deviceRequest,
+        encryptionInfo,
+      },
     };
 
-    // W3C Digital Credentials API with ISO 18013-7 protocol binding
     const credentialRequest = {
       mediation: "required",
       digital: {
-        // Modern W3C Digital Credentials specification (providers array)
-        providers: [
-          {
-            protocol: "iso18013-7",
-            request: requestData,
-            data: requestData,
-          },
-        ],
-        // Requests fallback array for Safari / WebKit preview variations
-        requests: [
-          {
-            protocol: "iso18013-7",
-            data: requestData,
-          },
-          {
-            protocol: "org-iso-mdoc",
-            data: requestData,
-          },
-        ],
+        requests: [requestItem],
       },
     };
 
@@ -1006,109 +1042,147 @@
         "Please use Safari on iOS 18+ (or macOS Sequoia with iPhone mirroring), or scan the desktop QR code with your iPhone camera."
       );
       if (onError) onError(unsupportedErr);
+      prefetchWalletAuthOptions(targetSessionId);
       throw unsupportedErr;
     }
 
     let credential = null;
     let lastError = null;
 
-    // 1. Primary W3C path: navigator.credentials.get({ mediation: "required", digital: { providers: [...] } })
-    if (hasCredentialsGet) {
-      try {
-        console.log("[PassGate] Invoking navigator.credentials.get({ mediation: 'required', digital: { providers: [{ protocol: 'iso18013-7' }] } })");
-        credential = await navigator.credentials.get(credentialRequest);
-        console.log("[PassGate] navigator.credentials.get resolved successfully:", credential);
-      } catch (err1) {
-        console.warn("[PassGate] Primary credentials.get error:", err1.name, err1.message);
-        lastError = err1;
-
-        // If user explicitly dismissed or canceled Face ID / Apple Wallet sheet:
-        if (
-          err1.name === "AbortError" ||
-          err1.name === "NotAllowedError" ||
-          err1.message?.toLowerCase().includes("aborted") ||
-          err1.message?.toLowerCase().includes("canceled") ||
-          err1.message?.toLowerCase().includes("cancelled") ||
-          err1.message?.toLowerCase().includes("dismissed")
-        ) {
-          const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
-          if (onError) onError(cancelErr);
-          throw cancelErr;
-        }
-
-        // Try without mediation parameter
+    try {
+      // 1. Primary WebKit path: navigator.credentials.get({ mediation: "required", digital: { requests: [requestItem] } })
+      // Initiated synchronously on the active user-gesture call stack without an async gap.
+      if (hasCredentialsGet) {
         try {
-          console.log("[PassGate] Trying navigator.credentials.get without mediation parameter...");
-          const unmediatedRequest = { digital: credentialRequest.digital };
-          credential = await navigator.credentials.get(unmediatedRequest);
-          console.log("[PassGate] Secondary credentials.get resolved successfully:", credential);
-        } catch (err2) {
-          console.warn("[PassGate] Secondary credentials.get error:", err2.name, err2.message);
-          lastError = err2;
+          console.log("[PassGate] Invoking navigator.credentials.get({ mediation: 'required', digital: { requests: [{ protocol: 'org-iso-mdoc' }] } })");
+          const credentialPromise = navigator.credentials.get(credentialRequest);
+          credential = await credentialPromise;
+          console.log("[PassGate] navigator.credentials.get resolved successfully:", credential);
+        } catch (err1) {
+          console.warn("[PassGate] Primary credentials.get error:", err1.name, err1.message);
+          lastError = err1;
+
+          // If user explicitly dismissed or canceled Face ID / Apple Wallet sheet:
+          if (
+            err1.name === "AbortError" ||
+            err1.message?.toLowerCase().includes("aborted") ||
+            err1.message?.toLowerCase().includes("canceled") ||
+            err1.message?.toLowerCase().includes("cancelled") ||
+            err1.message?.toLowerCase().includes("dismissed")
+          ) {
+            const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
+            if (onError) onError(cancelErr);
+            throw cancelErr;
+          }
+
+          // Try without mediation parameter (WebKit compatibility fallback)
+          try {
+            console.log("[PassGate] Retrying navigator.credentials.get without mediation parameter...");
+            credential = await navigator.credentials.get({
+              digital: {
+                requests: [requestItem],
+              },
+            });
+            console.log("[PassGate] Secondary credentials.get resolved successfully:", credential);
+          } catch (err2) {
+            console.warn("[PassGate] Secondary credentials.get error:", err2.name, err2.message);
+            lastError = err2;
+
+            if (
+              err2.name === "AbortError" ||
+              err2.message?.toLowerCase().includes("aborted") ||
+              err2.message?.toLowerCase().includes("canceled") ||
+              err2.message?.toLowerCase().includes("cancelled") ||
+              err2.message?.toLowerCase().includes("dismissed")
+            ) {
+              const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
+              if (onError) onError(cancelErr);
+              throw cancelErr;
+            }
+          }
         }
       }
-    }
 
-    // 2. Fallback path: navigator.identity.get({ digital: { providers: [...] } })
-    if (!credential && hasIdentityGet) {
-      try {
-        console.log("[PassGate] Invoking navigator.identity.get fallback...");
-        credential = await navigator.identity.get(credentialRequest);
-        console.log("[PassGate] navigator.identity.get resolved successfully:", credential);
-      } catch (idErr) {
-        console.warn("[PassGate] navigator.identity.get error:", idErr.name, idErr.message);
-        if (
-          idErr.name === "AbortError" ||
-          idErr.name === "NotAllowedError" ||
-          idErr.message?.toLowerCase().includes("aborted") ||
-          idErr.message?.toLowerCase().includes("canceled") ||
-          idErr.message?.toLowerCase().includes("cancelled") ||
-          idErr.message?.toLowerCase().includes("dismissed")
-        ) {
-          const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
-          if (onError) onError(cancelErr);
-          throw cancelErr;
+      // 2. Fallback path: navigator.identity.get({ digital: { requests: [requestItem] } })
+      if (!credential && hasIdentityGet && !lastError?.message?.includes("canceled") && !lastError?.message?.includes("aborted")) {
+        try {
+          console.log("[PassGate] Invoking navigator.identity.get fallback...");
+          credential = await navigator.identity.get({
+            digital: {
+              requests: [requestItem],
+            },
+          });
+          console.log("[PassGate] navigator.identity.get resolved successfully:", credential);
+        } catch (idErr) {
+          console.warn("[PassGate] navigator.identity.get error:", idErr.name, idErr.message);
+          if (
+            idErr.name === "AbortError" ||
+            idErr.message?.toLowerCase().includes("aborted") ||
+            idErr.message?.toLowerCase().includes("canceled") ||
+            idErr.message?.toLowerCase().includes("cancelled") ||
+            idErr.message?.toLowerCase().includes("dismissed")
+          ) {
+            const cancelErr = new Error("Apple Wallet presentation was dismissed or canceled.");
+            if (onError) onError(cancelErr);
+            throw cancelErr;
+          }
+          if (!lastError) lastError = idErr;
         }
-        if (!lastError) lastError = idErr;
-      }
-    }
-
-    // 3. Process credential returned by Apple Wallet
-    if (credential) {
-      if (onStatus) onStatus("verifying", "Cryptographically validating credential presentation & IACA root…");
-
-      let payloadData = null;
-      if (credential.data) {
-        payloadData = credential.data;
-      } else if (typeof credential.toJSON === "function") {
-        payloadData = credential.toJSON();
-      } else {
-        payloadData = credential;
       }
 
-      console.log("[PassGate] Sending Apple Wallet payload to /api/wallet/verify endpoint...");
-      const verifyRes = await api("/api/wallet/verify", {
-        method: "POST",
-        body: JSON.stringify({
-          sessionId: authOptions.sessionId || targetSession.id,
-          credential: payloadData,
-        }),
-      });
+      // 3. Process credential returned by Apple Wallet
+      if (credential) {
+        if (onStatus) onStatus("verifying", "Cryptographically validating credential presentation & IACA root…");
 
-      console.log("[PassGate] /api/wallet/verify response:", verifyRes);
-      const outcome = verifyRes.result || verifyRes;
-      if (onCompleted) onCompleted(outcome);
-      return outcome;
+        let payloadData = null;
+        if (credential.data) {
+          payloadData = credential.data;
+        } else if (typeof credential.toJSON === "function") {
+          payloadData = credential.toJSON();
+        } else {
+          payloadData = credential;
+        }
+
+        console.log("[PassGate] Sending Apple Wallet payload to verification endpoint...");
+        let verifyRes = null;
+        try {
+          verifyRes = await api("/verify-doc", {
+            method: "POST",
+            body: JSON.stringify({
+              sessionId: targetSession.id,
+              data: payloadData,
+            }),
+          });
+        } catch (verifyDocErr) {
+          console.warn("[PassGate] /verify-doc failed, trying /api/wallet/verify fallback:", verifyDocErr.message);
+          verifyRes = await api("/api/wallet/verify", {
+            method: "POST",
+            body: JSON.stringify({
+              sessionId: targetSession.id,
+              credential: payloadData,
+              data: payloadData,
+            }),
+          });
+        }
+
+        console.log("[PassGate] Verification response:", verifyRes);
+        const outcome = verifyRes.result || verifyRes;
+        if (onCompleted) onCompleted(outcome);
+        return outcome;
+      }
+
+      // 4. If neither returned a credential:
+      const reasonDetail = lastError ? `${lastError.name}: ${lastError.message}` : "W3C Digital Credentials API did not return a credential.";
+      const helpfulMsg = `Could not invoke Apple Wallet (${reasonDetail}). ` +
+        `Ensure you are in Safari on an iPhone with iOS 18+ and a mobile driver's license in Apple Wallet.`;
+
+      const failureErr = new Error(helpfulMsg);
+      if (onError) onError(failureErr);
+      throw failureErr;
+    } finally {
+      // Background re-fetch fresh options for the next verification attempt (success or failure)
+      prefetchWalletAuthOptions(targetSessionId);
     }
-
-    // 4. If neither returned a credential:
-    const reasonDetail = lastError ? `${lastError.name}: ${lastError.message}` : "W3C Digital Credentials API did not return a credential.";
-    const helpfulMsg = `Could not invoke Apple Wallet (${reasonDetail}). ` +
-      `Ensure you are in Safari on an iPhone with iOS 18+ and a mobile driver's license in Apple Wallet.`;
-
-    const failureErr = new Error(helpfulMsg);
-    if (onError) onError(failureErr);
-    throw failureErr;
   }
 
   // ── Pre-Computed Test Personas for Direct Demonstration ─────────────────
@@ -1328,11 +1402,18 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
   // ── Centralized Test Persona Verification Handler ──────────────────────────
   // Immediately presents any simulated persona to the Door & Bar Terminal.
   // Directly renders the authoritative verified pass or denial screen instantly with zero delay.
-  function runTestPersona(scenarioKey) {
-    console.log("[PassGate] Running test persona:", scenarioKey);
+  function runTestPersona(scenarioKey, targetContext = null) {
+    console.log("[PassGate] Running test persona:", scenarioKey, "context:", targetContext);
     const outcome = TEST_PERSONAS[scenarioKey];
     if (!outcome) {
       console.error("[PassGate] Unknown test persona:", scenarioKey);
+      return;
+    }
+
+    // If triggered from Table Order / Menu modal, complete the order verification right in the modal
+    if (targetContext === "menu") {
+      stopMenuPolling();
+      handleMenuVerificationOutcome(outcome);
       return;
     }
 
@@ -1376,8 +1457,8 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
   }
 
   // Backwards compatibility alias
-  function presentTestPersona(scenarioKey) {
-    runTestPersona(scenarioKey);
+  function presentTestPersona(scenarioKey, targetContext = null) {
+    runTestPersona(scenarioKey, targetContext);
   }
 
   function triggerDirectScenario(scenarioKey) {
@@ -1404,46 +1485,42 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
 
   // Verify button on Age Check page (Genuine Apple Wallet / mDL)
   if (btnWalletRedirect) {
-    btnWalletRedirect.addEventListener("click", async () => {
+    btnWalletRedirect.addEventListener("click", () => {
       const feedbackEl = $("#terminal-wallet-feedback");
       if (feedbackEl) feedbackEl.style.display = "none";
 
-      try {
-        if (!currentDirectSessionId) {
-          await startNewDirectSession();
-        }
+      goDirectState("verifying");
+      if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = "Waiting for Apple Wallet authorization…";
 
-        goDirectState("verifying");
-        if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = "Waiting for Apple Wallet authorization…";
+      const sessionObj = currentDirectSessionData || (currentDirectSessionId ? { id: currentDirectSessionId } : null);
 
-        await executeAppleWalletVerification(currentDirectSessionData || { id: currentDirectSessionId }, {
-          onStatus: (phase, msg) => {
-            if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = msg;
-          },
-          onCompleted: (result) => {
-            if (result.decision === "GRANTED") {
-              renderDirectGranted(result);
-              goDirectState("granted");
-            } else {
-              renderDirectDenied(result);
-              goDirectState("denied");
-            }
-          },
-          onError: (err) => {
-            goDirectState("awaiting");
-            if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = "Terminal Ready · Waiting for patron presentation";
-            if (feedbackEl) {
-              feedbackEl.style.display = "block";
-              feedbackEl.innerHTML = `
-                <strong>ℹ️ Apple Wallet Notice:</strong> ${err.message}<br>
-                <span style="font-size:0.73rem;opacity:0.85;">Tip: Scan the QR code on the "Scan QR Code" tab with your iPhone camera to present your real Apple Wallet ID, or click one of the Test Customer ID Scenarios below for instant spoofing.</span>
-              `;
-            }
+      executeAppleWalletVerification(sessionObj, {
+        onStatus: (phase, msg) => {
+          if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = msg;
+        },
+        onCompleted: (result) => {
+          if (result.decision === "GRANTED") {
+            renderDirectGranted(result);
+            goDirectState("granted");
+          } else {
+            renderDirectDenied(result);
+            goDirectState("denied");
           }
-        });
-      } catch (err) {
+        },
+        onError: (err) => {
+          goDirectState("awaiting");
+          if (terminalAwaitingStatus) terminalAwaitingStatus.textContent = "Terminal Ready · Waiting for patron presentation";
+          if (feedbackEl) {
+            feedbackEl.style.display = "block";
+            feedbackEl.innerHTML = `
+              <strong>ℹ️ Apple Wallet Notice:</strong> ${err.message}<br>
+              <span style="font-size:0.73rem;opacity:0.85;">Tip: Scan the QR code on the "Scan QR Code" tab with your iPhone camera to present your real Apple Wallet ID, or click one of the Test Customer ID Scenarios below for instant spoofing.</span>
+            `;
+          }
+        }
+      }).catch((err) => {
         console.warn("Direct verify with Apple Wallet:", err.message);
-      }
+      });
     });
   }
 
@@ -1812,6 +1889,15 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
       const session = await api("/session", { method: "POST" });
       menuSessionId = session.id;
       menuSessionData = session;
+
+      // Seed cache synchronously and pre-fetch auth-options ahead of time
+      if (session.dcRequest) {
+        const initial = { sessionId: session.id, ...session.dcRequest };
+        walletOptionsCache.set(session.id, initial);
+        cachedWalletOptions = initial;
+      }
+      prefetchWalletAuthOptions(session.id);
+
       const targetOrigin = resolveTargetOrigin(session);
       let qrTargetUrl = `${targetOrigin}/verify?session_id=${encodeURIComponent(session.id)}`;
       if (targetOrigin.includes("ngrok")) qrTargetUrl += "&ngrok-skip-browser-warning=true";
@@ -1899,38 +1985,32 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
   });
 
   // Genuine Apple Wallet verification button in menu modal
-  $("#btn-menu-apple-wallet")?.addEventListener("click", async () => {
+  $("#btn-menu-apple-wallet")?.addEventListener("click", () => {
     const feedbackEl = $("#menu-wallet-feedback");
     if (feedbackEl) feedbackEl.style.display = "none";
 
-    try {
-      if (!menuSessionId) {
-        const session = await api("/session", { method: "POST" });
-        menuSessionId = session.id;
-        menuSessionData = session;
-      }
+    const sessionObj = menuSessionData || (menuSessionId ? { id: menuSessionId } : null);
 
-      await executeAppleWalletVerification(menuSessionData || { id: menuSessionId }, {
-        onStatus: (phase, msg) => {
-          console.log("[Menu Apple Wallet]", phase, msg);
-        },
-        onCompleted: (result) => {
-          stopMenuPolling();
-          handleMenuVerificationOutcome(result);
-        },
-        onError: (err) => {
-          if (feedbackEl) {
-            feedbackEl.style.display = "block";
-            feedbackEl.innerHTML = `
-              <strong>ℹ️ Apple Wallet Notice:</strong> ${err.message}<br>
-              <span style="font-size:0.7rem;opacity:0.85;">Tip: To test with your iPhone, click "Scan with Second Device Camera Instead" below to scan the QR code, or click one of the One-Click Demo Test Personas below.</span>
-            `;
-          }
+    executeAppleWalletVerification(sessionObj, {
+      onStatus: (phase, msg) => {
+        console.log("[Menu Apple Wallet]", phase, msg);
+      },
+      onCompleted: (result) => {
+        stopMenuPolling();
+        handleMenuVerificationOutcome(result);
+      },
+      onError: (err) => {
+        if (feedbackEl) {
+          feedbackEl.style.display = "block";
+          feedbackEl.innerHTML = `
+            <strong>ℹ️ Apple Wallet Notice:</strong> ${err.message}<br>
+            <span style="font-size:0.7rem;opacity:0.85;">Tip: To test with your iPhone, click "Scan with Second Device Camera Instead" below to scan the QR code, or click one of the One-Click Demo Test Personas below.</span>
+          `;
         }
-      });
-    } catch (err) {
+      }
+    }).catch((err) => {
       console.warn("Menu Apple Wallet:", err.message);
-    }
+    });
   });
 
   // Dedicated demo fallback button
@@ -1985,6 +2065,15 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
     const mobilePanel = $("#mobile-patron-panel");
     if (!mobilePanel) return;
 
+    if (session && session.id) {
+      if (session.dcRequest) {
+        const initial = { sessionId: session.id, ...session.dcRequest };
+        walletOptionsCache.set(session.id, initial);
+        cachedWalletOptions = initial;
+      }
+      prefetchWalletAuthOptions(session.id);
+    }
+
     // Hide terminal tabs navigation & panels
     Object.values(tabPanels).forEach((p) => p && p.classList.remove("active"));
     const tabsNav = $("#demo-tabs-nav");
@@ -1999,39 +2088,37 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
     // Button: Real Apple Wallet Verification
     const btnMobileAppleWallet = $("#btn-mobile-apple-wallet");
     if (btnMobileAppleWallet) {
-      btnMobileAppleWallet.onclick = async () => {
-        try {
-          await executeAppleWalletVerification(session, {
-            onStatus: (phase, text) => {
-              const statusBox = $("#mobile-wallet-status-box");
-              const statusText = $("#mobile-wallet-status-text");
-              const statusDot = $("#mobile-wallet-status-dot");
-              if (statusBox) statusBox.style.display = "flex";
-              if (statusText) statusText.textContent = text;
-              if (statusDot) statusDot.style.background = phase === "verifying" ? "#f59e0b" : "#38bdf8";
-            },
-            onCompleted: (result) => {
-              renderMobileOutcome(result);
-            },
-            onError: (err) => {
-              const statusBox = $("#mobile-wallet-status-box");
-              const statusText = $("#mobile-wallet-status-text");
-              const statusDot = $("#mobile-wallet-status-dot");
-              if (statusBox) {
-                statusBox.style.display = "flex";
-                statusBox.style.borderColor = "var(--status-rose-border)";
-                statusBox.style.background = "var(--status-rose-bg)";
-              }
-              if (statusText) {
-                statusText.style.color = "var(--status-rose-text)";
-                statusText.innerHTML = `<strong>Notice:</strong> ${err.message}`;
-              }
-              if (statusDot) statusDot.style.background = "#f43f5e";
-            },
-          });
-        } catch (err) {
+      btnMobileAppleWallet.onclick = () => {
+        executeAppleWalletVerification(session, {
+          onStatus: (phase, text) => {
+            const statusBox = $("#mobile-wallet-status-box");
+            const statusText = $("#mobile-wallet-status-text");
+            const statusDot = $("#mobile-wallet-status-dot");
+            if (statusBox) statusBox.style.display = "flex";
+            if (statusText) statusText.textContent = text;
+            if (statusDot) statusDot.style.background = phase === "verifying" ? "#f59e0b" : "#38bdf8";
+          },
+          onCompleted: (result) => {
+            renderMobileOutcome(result);
+          },
+          onError: (err) => {
+            const statusBox = $("#mobile-wallet-status-box");
+            const statusText = $("#mobile-wallet-status-text");
+            const statusDot = $("#mobile-wallet-status-dot");
+            if (statusBox) {
+              statusBox.style.display = "flex";
+              statusBox.style.borderColor = "var(--status-rose-border)";
+              statusBox.style.background = "var(--status-rose-bg)";
+            }
+            if (statusText) {
+              statusText.style.color = "var(--status-rose-text)";
+              statusText.innerHTML = `<strong>Notice:</strong> ${err.message}`;
+            }
+            if (statusDot) statusDot.style.background = "#f43f5e";
+          },
+        }).catch((err) => {
           console.warn("[Mobile Apple Wallet]", err.message);
-        }
+        });
       };
     }
 
@@ -2119,10 +2206,16 @@ TEST_PERSONAS.apple_wallet_mock = TEST_PERSONAS.passkit_mock;
     // If opened as a patron session from scanning QR code (/verify?session_id=XYZ)
     if (sid) {
       try {
+        prefetchWalletAuthOptions(sid);
         const session = await api(`/session/${sid}`);
         if (session && session.id) {
           currentDirectSessionId = session.id;
           currentDirectSessionData = session;
+          if (session.dcRequest) {
+            const initial = { sessionId: session.id, ...session.dcRequest };
+            walletOptionsCache.set(session.id, initial);
+            if (!cachedWalletOptions) cachedWalletOptions = initial;
+          }
           activateMobilePatronView(session);
           startDirectPolling(session.id);
           return;
