@@ -1,9 +1,14 @@
 import SwiftUI
 
+/// Customer-facing view allowing the patron to view their Apple Wallet Digital ID,
+/// receive incoming age verification requests from venues (restaurants/bars/clubs),
+/// and present their mDL credential via Apple Wallet to generate an anti-fraud verified pass.
 public struct VerificationView: View {
     @ObservedObject var viewModel: VerificationViewModel
-    @State private var showingResultDetail: Bool = false
+    @State private var showingVerifiedPass: Bool = false
     @State private var showingWalletSheet: Bool = false
+    @State private var showingVenueSelector: Bool = false
+    @State private var showingPersonaSelector: Bool = false
     
     public init(viewModel: VerificationViewModel) {
         self.viewModel = viewModel
@@ -11,142 +16,206 @@ public struct VerificationView: View {
     
     public var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                // MARK: - Header Status Chip
-                HStack {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(viewModel.operationMode == .nativePassKit ? Color.green : Color.blue)
-                            .frame(width: 8, height: 8)
-                        Text(viewModel.operationMode.rawValue)
-                            .font(.caption.bold())
+            VStack(spacing: 20) {
+                // MARK: - Customer Profile & Mode Bar
+                HStack(spacing: 12) {
+                    Button(action: { showingPersonaSelector = true }) {
+                        HStack(spacing: 8) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.15))
+                                    .frame(width: 34, height: 34)
+                                Image(systemName: viewModel.selectedPersona.portraitSymbol)
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.blue)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Customer Profile")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                HStack(spacing: 4) {
+                                    Text(viewModel.selectedPersona.givenName + " " + viewModel.selectedPersona.familyName)
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.primary)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(.tertiarySystemBackground))
-                    .cornerRadius(12)
                     
                     Spacer()
                     
-                    if viewModel.useBackendVerification {
-                        HStack(spacing: 4) {
-                            Image(systemName: "server.rack")
-                                .font(.caption2)
-                            Text(viewModel.backendService.isConnected ? "Backend Active" : "Backend Offline")
-                                .font(.caption2.bold())
-                        }
-                        .foregroundColor(viewModel.backendService.isConnected ? .green : .orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(.tertiarySystemBackground))
-                        .cornerRadius(8)
-                    }
+                    // Age Status Pill
+                    Text(viewModel.selectedPersona.isOver21 ? "Legal (21+)" : "Minor (<21)")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(viewModel.selectedPersona.isOver21 ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
+                        .foregroundColor(viewModel.selectedPersona.isOver21 ? .green : .red)
+                        .cornerRadius(12)
                 }
                 .padding(.horizontal)
                 
-                // MARK: - Hero Digital License Card
+                // MARK: - Customer Apple Wallet Digital ID Card Preview
                 ZStack {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [Color(red: 0.1, green: 0.15, blue: 0.28), Color(red: 0.05, green: 0.08, blue: 0.15)],
+                                colors: [Color(red: 0.10, green: 0.16, blue: 0.28), Color(red: 0.05, green: 0.08, blue: 0.14)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(height: 220)
-                        .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
+                        .frame(height: 146)
+                        .shadow(color: Color.black.opacity(0.18), radius: 10, x: 0, y: 5)
                     
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("MOBILE DRIVER'S LICENSE")
-                                    .font(.system(size: 11, weight: .black, design: .rounded))
+                                Text("APPLE WALLET DIGITAL ID")
+                                    .font(.system(size: 9, weight: .black, design: .rounded))
                                     .foregroundColor(.white.opacity(0.7))
-                                    .tracking(1.2)
-                                Text("Apple Wallet Presentation")
-                                    .font(.system(size: 16, weight: .bold))
+                                    .tracking(1.1)
+                                Text(viewModel.selectedPersona.issuingAuthority.uppercased())
+                                    .font(.system(size: 12, weight: .heavy))
                                     .foregroundColor(.white)
                             }
                             Spacer()
-                            Image(systemName: "person.badge.shield.checkmark.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                        
-                        Spacer()
-                        
-                        HStack(alignment: .bottom) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("REQUESTED ELEMENT")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.6))
-                                HStack(spacing: 8) {
-                                    Text("Age 21 or Older")
-                                        .font(.system(size: 17, weight: .heavy))
-                                        .foregroundColor(.white)
-                                    Text("ISO 18013-5")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.white.opacity(0.2))
-                                        .cornerRadius(4)
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            Spacer()
                             Image(systemName: "wave.3.right")
-                                .font(.system(size: 20))
+                                .font(.system(size: 18))
                                 .foregroundColor(.white.opacity(0.8))
                         }
-                    }
-                    .padding(20)
-                }
-                .padding(.horizontal)
-                
-                // MARK: - Active Mode & Persona Selection
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "person.crop.circle.badge.checkmark")
-                            .foregroundColor(.blue)
-                        Text("Select Patron to Verify:")
-                            .font(.subheadline.bold())
+                        
                         Spacer()
-                        Text(viewModel.selectedPersona.isOver21 ? "Legal (21+)" : "Minor (<21)")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(viewModel.selectedPersona.isOver21 ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
-                            .foregroundColor(viewModel.selectedPersona.isOver21 ? .green : .red)
-                            .cornerRadius(8)
-                    }
-                    
-                    // Quick Persona Segmented Control
-                    Picker("Patron Profile", selection: $viewModel.selectedPersona) {
-                        ForEach(SimulatorPersona.presets) { persona in
-                            Text(persona.givenName).tag(persona)
+                        
+                        HStack(alignment: .center, spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.white.opacity(0.15))
+                                    .frame(width: 44, height: 52)
+                                Image(systemName: viewModel.selectedPersona.portraitSymbol)
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(viewModel.selectedPersona.givenName) \(viewModel.selectedPersona.familyName)")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                Text("DOB: \(viewModel.selectedPersona.birthDate)")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.75))
+                                Text(viewModel.selectedPersona.maskedIdNumber)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.55))
+                            }
+                            
+                            Spacer()
                         }
                     }
-                    .pickerStyle(.segmented)
-                    
-                    HStack {
-                        Text(viewModel.selectedPersona.name)
-                            .font(.caption.bold())
-                        Spacer()
-                        Text("DOB: \(viewModel.selectedPersona.birthDate)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    .padding(16)
                 }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(16)
                 .padding(.horizontal)
                 
-                // MARK: - Action Buttons
-                VStack(spacing: 12) {
+                // MARK: - Incoming Venue Age Verification Request (Notification Card)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top) {
+                        HStack(spacing: 8) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.orange.opacity(0.2))
+                                    .frame(width: 32, height: 32)
+                                Image(systemName: "bell.badge.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 15))
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("INCOMING VERIFICATION REQUEST")
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundColor(.orange)
+                                    .tracking(1.0)
+                                Text("Venue requires proof of age")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Switch Venue Menu Button
+                        Menu {
+                            ForEach(VenueRequest.presets) { venue in
+                                Button(action: { viewModel.activeVenue = venue }) {
+                                    Label(venue.name, systemImage: venue.iconName)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("Change Venue")
+                                    .font(.caption2.bold())
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 10))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.tertiarySystemBackground))
+                            .cornerRadius(8)
+                            .foregroundColor(.accentColor)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Venue Info Row
+                    HStack(spacing: 12) {
+                        Image(systemName: viewModel.activeVenue.iconName)
+                            .font(.system(size: 24))
+                            .foregroundColor(.accentColor)
+                            .frame(width: 44, height: 44)
+                            .background(Color.accentColor.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(viewModel.activeVenue.name)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text(viewModel.activeVenue.category + " · " + viewModel.activeVenue.location)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    
+                    Text(viewModel.activeVenue.description)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    // Privacy & Attributes Disclosure Box
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "lock.shield.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
+                            Text("Privacy Preserved (ISO 18013-5 willNotStore)")
+                                .font(.caption.bold())
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Text("Only confirms that you are 21 or older and shares your ID photo. Your street address, document number, and full birthdate remain private.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(10)
+                    .background(Color(.tertiarySystemBackground))
+                    .cornerRadius(10)
+                    
+                    // Primary Verification Action
                     WalletVerificationButton(
-                        title: "Verify with Apple Wallet",
+                        title: "Verify My Age with Apple Wallet",
                         isLoading: viewModel.uiState.isLoading,
                         action: {
                             if viewModel.operationMode == .simulatorMock {
@@ -156,79 +225,40 @@ public struct VerificationView: View {
                             }
                         }
                     )
-                    
-                    Text("Zero-Retention: Age threshold is verified cryptographically without storing personal identity records.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
                 }
+                .padding(18)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
                 .padding(.horizontal)
                 
-                // MARK: - Status & Error Banners
-                if case .failed(let errorMsg) = viewModel.uiState {
-                    VStack(alignment: .leading, spacing: 10) {
+                // MARK: - Active Pass Banner (if verified)
+                if let latest = viewModel.latestVerifiedResult {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Image(systemName: "exclamationmark.octagon.fill")
-                                .foregroundColor(.red)
-                            Text("Verification Error")
-                                .font(.headline)
-                                .foregroundColor(.red)
-                        }
-                        
-                        Text(errorMsg)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        if viewModel.operationMode == .nativePassKit {
-                            Button(action: {
-                                viewModel.operationMode = .simulatorMock
-                                viewModel.reset()
-                            }) {
-                                HStack {
-                                    Image(systemName: "sparkles")
-                                    Text("Switch to Simulator Mock Mode")
-                                }
+                            Circle()
+                                .fill(latest.ageOver21 ? Color.green : Color.red)
+                                .frame(width: 10, height: 10)
+                            Text("Active Verified Pass Available")
                                 .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                            }
-                            .padding(.top, 4)
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(14)
-                    .padding(.horizontal)
-                }
-                
-                // MARK: - Inline Completed Result (if verified)
-                if case .completed(let result) = viewModel.uiState {
-                    VStack(spacing: 16) {
-                        HStack {
-                            Text("Latest Verification")
-                                .font(.headline)
                             Spacer()
-                            StatusBadgeView(decision: result.decision)
+                            Text(latest.timestamp.formatted(date: .omitted, time: .shortened))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         
-                        Divider()
-                        
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(result.attributes.fullName)
-                                    .font(.title3.bold())
-                                Text(result.reason)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(latest.attributes.fullName)
+                                    .font(.headline)
+                                Text(latest.ageOver21 ? "Age 21+ Confirmed" : "Under 21 (Denied)")
+                                    .font(.caption)
+                                    .foregroundColor(latest.ageOver21 ? .green : .red)
                             }
+                            
                             Spacer()
-                            Button("View Details") {
-                                showingResultDetail = true
+                            
+                            Button("Present Pass") {
+                                showingVerifiedPass = true
                             }
                             .font(.subheadline.bold())
                             .buttonStyle(.borderedProminent)
@@ -239,10 +269,32 @@ public struct VerificationView: View {
                     .cornerRadius(16)
                     .padding(.horizontal)
                 }
+                
+                // MARK: - Error Banner
+                if case .failed(let errorMsg) = viewModel.uiState {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "exclamationmark.octagon.fill")
+                                .foregroundColor(.red)
+                            Text("Verification Failed")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                        }
+                        Text(errorMsg)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(14)
+                    .padding(.horizontal)
+                }
             }
-            .padding(.vertical)
+            .padding(.top)
+            .padding(.bottom, 60)
         }
-        .navigationTitle("PassGate Identity")
+        .navigationTitle("PassGate ID")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(action: { viewModel.showingSettings = true }) {
@@ -250,14 +302,25 @@ public struct VerificationView: View {
                 }
             }
         }
+        // Persona selection sheet
+        .confirmationDialog("Switch Customer ID Profile", isPresented: $showingPersonaSelector, titleVisibility: .visible) {
+            ForEach(SimulatorPersona.presets) { persona in
+                Button("\(persona.name) - \(persona.isOver21 ? "Legal (21+)" : "Minor (<21)")") {
+                    viewModel.selectedPersona = persona
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        // Apple Wallet Mock Presentation Sheet
         .sheet(isPresented: $showingWalletSheet) {
             AppleWalletSheetView(
                 persona: viewModel.selectedPersona,
+                venue: viewModel.activeVenue,
                 onConfirm: {
                     showingWalletSheet = false
                     viewModel.executeVerification(for: viewModel.selectedPersona)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                        showingResultDetail = true
+                        showingVerifiedPass = true
                     }
                 },
                 onCancel: {
@@ -265,11 +328,12 @@ public struct VerificationView: View {
                 }
             )
         }
-        .sheet(isPresented: $showingResultDetail) {
-            if case .completed(let result) = viewModel.uiState {
+        // Interactive Anti-Fraud Verified Pass Screen
+        .sheet(isPresented: $showingVerifiedPass) {
+            if let result = viewModel.latestVerifiedResult {
                 NavigationStack {
-                    ResultDetailView(result: result) {
-                        showingResultDetail = false
+                    VerifiedPassView(result: result) {
+                        showingVerifiedPass = false
                     }
                 }
             }

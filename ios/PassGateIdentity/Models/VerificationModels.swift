@@ -38,6 +38,9 @@ public struct IdentityAttributes: Codable, Equatable {
     public var ageOver21: Bool?
     public var issuingAuthority: String?
     public var computedAge: Int?
+    public var portraitInitials: String?
+    public var portraitSymbol: String?
+    public var accentHex: String?
     
     public init(
         givenName: String? = nil,
@@ -45,7 +48,10 @@ public struct IdentityAttributes: Codable, Equatable {
         birthDate: String? = nil,
         ageOver21: Bool? = nil,
         issuingAuthority: String? = "California DMV",
-        computedAge: Int? = nil
+        computedAge: Int? = nil,
+        portraitInitials: String? = nil,
+        portraitSymbol: String? = nil,
+        accentHex: String? = nil
     ) {
         self.givenName = givenName
         self.familyName = familyName
@@ -53,6 +59,9 @@ public struct IdentityAttributes: Codable, Equatable {
         self.ageOver21 = ageOver21
         self.issuingAuthority = issuingAuthority
         self.computedAge = computedAge
+        self.portraitInitials = portraitInitials
+        self.portraitSymbol = portraitSymbol
+        self.accentHex = accentHex
     }
     
     public var fullName: String {
@@ -67,7 +76,76 @@ public struct IdentityAttributes: Codable, Equatable {
         case ageOver21 = "age_over_21"
         case issuingAuthority = "issuing_authority"
         case computedAge = "computed_age"
+        case portraitInitials = "portrait_initials"
+        case portraitSymbol = "portrait_symbol"
+        case accentHex = "accent_hex"
     }
+}
+
+// MARK: - Venue Verification Request
+
+public struct VenueRequest: Identifiable, Codable, Equatable, Hashable {
+    public let id: String
+    public let name: String
+    public let category: String
+    public let location: String
+    public let iconName: String
+    public let requiredAge: Int
+    public let description: String
+    
+    public init(
+        id: String,
+        name: String,
+        category: String,
+        location: String,
+        iconName: String,
+        requiredAge: Int = 21,
+        description: String
+    ) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.location = location
+        self.iconName = iconName
+        self.requiredAge = requiredAge
+        self.description = description
+    }
+    
+    public static let rooftopLounge = VenueRequest(
+        id: "venue-rooftop",
+        name: "The Rooftop Lounge & Bar",
+        category: "Cocktails & Dining",
+        location: "100 Grand Avenue, Sky Deck",
+        iconName: "wineglass.fill",
+        requiredAge: 21,
+        description: "Requests proof of age (21+) for cocktail service and rooftop terrace admission."
+    )
+    
+    public static let brassMonkey = VenueRequest(
+        id: "venue-brass-monkey",
+        name: "The Brass Monkey Tavern",
+        category: "Pub & Craft Beer",
+        location: "54 Market Street",
+        iconName: "mug.fill",
+        requiredAge: 21,
+        description: "Requests age verification for taproom counter access."
+    )
+    
+    public static let velvetClub = VenueRequest(
+        id: "venue-velvet-club",
+        name: "The Velvet Room & Club",
+        category: "Nightclub & VIP Lounge",
+        location: "880 Broadway Boulevard",
+        iconName: "sparkles",
+        requiredAge: 21,
+        description: "Requires digital age confirmation (21+) at VIP door security."
+    )
+    
+    public static let presets: [VenueRequest] = [
+        rooftopLounge,
+        brassMonkey,
+        velvetClub
+    ]
 }
 
 // MARK: - Cryptographic & Integrity Checks
@@ -141,6 +219,8 @@ public struct IdentityResult: Identifiable, Codable, Equatable {
     public var trust: TrustDetails
     public var source: VerificationSource
     public var timestamp: Date
+    public var venue: VenueRequest?
+    public var verificationToken: String
     
     public init(
         id: UUID = UUID(),
@@ -152,7 +232,9 @@ public struct IdentityResult: Identifiable, Codable, Equatable {
         checks: VerificationChecks = VerificationChecks(),
         trust: TrustDetails = TrustDetails(),
         source: VerificationSource = .nativePassKit,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        venue: VenueRequest? = VenueRequest.rooftopLounge,
+        verificationToken: String = "PG-" + UUID().uuidString.prefix(8).uppercased()
     ) {
         self.id = id
         self.sessionId = sessionId
@@ -164,6 +246,8 @@ public struct IdentityResult: Identifiable, Codable, Equatable {
         self.trust = trust
         self.source = source
         self.timestamp = timestamp
+        self.venue = venue
+        self.verificationToken = verificationToken
     }
 }
 
@@ -178,6 +262,10 @@ public struct SimulatorPersona: Identifiable, Hashable {
     public let isOver21: Bool
     public let issuingAuthority: String
     public let description: String
+    public let portraitInitials: String
+    public let portraitSymbol: String
+    public let accentHex: String
+    public let maskedIdNumber: String
     
     public static let johnAppleseed = SimulatorPersona(
         id: "john-appleseed",
@@ -187,7 +275,11 @@ public struct SimulatorPersona: Identifiable, Hashable {
         birthDate: "1999-05-15",
         isOver21: true,
         issuingAuthority: "California DMV (Apple Mock)",
-        description: "Official Apple Simulator identity profile. Meets legal age 21+ threshold."
+        description: "Official Apple Simulator customer identity. Meets legal age 21+ requirement.",
+        portraitInitials: "JA",
+        portraitSymbol: "person.crop.circle.fill",
+        accentHex: "#2563EB",
+        maskedIdNumber: "CA •••• 9102"
     )
     
     public static let janeDoe = SimulatorPersona(
@@ -198,7 +290,11 @@ public struct SimulatorPersona: Identifiable, Hashable {
         birthDate: "2005-10-20",
         isOver21: false,
         issuingAuthority: "New York DMV (Apple Mock)",
-        description: "Under-age minor persona for testing strict denial policies."
+        description: "Customer under 21 years old. Demonstrates legal threshold denial.",
+        portraitInitials: "JD",
+        portraitSymbol: "person.crop.circle.fill.badge.checkmark",
+        accentHex: "#DC2626",
+        maskedIdNumber: "NY •••• 4410"
     )
     
     public static let robertSmith = SimulatorPersona(
@@ -209,7 +305,11 @@ public struct SimulatorPersona: Identifiable, Hashable {
         birthDate: "1982-03-12",
         isOver21: true,
         issuingAuthority: "Arizona DMV (Apple Mock)",
-        description: "Mature adult patron. Verified age 21+ with complete name attributes."
+        description: "Adult customer persona. Verified age 21+ with complete ISO 18013-5 claims.",
+        portraitInitials: "RS",
+        portraitSymbol: "person.crop.circle.fill",
+        accentHex: "#0D9488",
+        maskedIdNumber: "AZ •••• 7731"
     )
     
     public static let lucasMiller = SimulatorPersona(
@@ -220,7 +320,11 @@ public struct SimulatorPersona: Identifiable, Hashable {
         birthDate: "2007-07-04",
         isOver21: false,
         issuingAuthority: "Colorado DMV (Apple Mock)",
-        description: "High school minor (17yo). Enforces strict refusal."
+        description: "High school minor customer (17yo). Enforces strict age refusal.",
+        portraitInitials: "LM",
+        portraitSymbol: "person.crop.circle.fill",
+        accentHex: "#EA580C",
+        maskedIdNumber: "CO •••• 1289"
     )
     
     public static let presets: [SimulatorPersona] = [

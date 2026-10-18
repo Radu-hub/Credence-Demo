@@ -3,6 +3,7 @@ import SwiftUI
 /// A native-fidelity Apple Wallet Identity Presentation sheet mimicking the iOS system sheet.
 public struct AppleWalletSheetView: View {
     public let persona: SimulatorPersona
+    public let venue: VenueRequest
     public let onConfirm: () -> Void
     public let onCancel: () -> Void
     
@@ -12,10 +13,12 @@ public struct AppleWalletSheetView: View {
     
     public init(
         persona: SimulatorPersona,
+        venue: VenueRequest = VenueRequest.rooftopLounge,
         onConfirm: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.persona = persona
+        self.venue = venue
         self.onConfirm = onConfirm
         self.onCancel = onCancel
     }
@@ -83,15 +86,28 @@ public struct AppleWalletSheetView: View {
                             Spacer()
                             
                             HStack(alignment: .bottom) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(persona.givenName) \(persona.familyName)")
-                                        .font(.system(size: 17, weight: .bold))
-                                        .foregroundColor(.white)
-                                    Text("DOB: \(persona.birthDate)")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.7))
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.2))
+                                            .frame(width: 44, height: 44)
+                                        Image(systemName: persona.portraitSymbol)
+                                            .font(.system(size: 24))
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(persona.givenName) \(persona.familyName)")
+                                            .font(.system(size: 17, weight: .bold))
+                                            .foregroundColor(.white)
+                                        Text("DOB: \(persona.birthDate)")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
                                 }
+                                
                                 Spacer()
+                                
                                 Text(persona.isOver21 ? "AGE 21+" : "AGE <21")
                                     .font(.system(size: 13, weight: .black))
                                     .padding(.horizontal, 8)
@@ -107,9 +123,9 @@ public struct AppleWalletSheetView: View {
                     
                     // MARK: - Request Details
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("PassGate Demo is requesting your age verification:")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        Text("\(venue.name) is requesting age verification:")
+                            .font(.subheadline.bold())
+                            .foregroundColor(.primary)
                         
                         VStack(spacing: 8) {
                             HStack {

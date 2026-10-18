@@ -110,7 +110,10 @@ public final class SimulatorMockProvider {
             birthDate: persona.birthDate,
             ageOver21: isOver21,
             issuingAuthority: persona.issuingAuthority,
-            computedAge: computedAge
+            computedAge: computedAge,
+            portraitInitials: persona.portraitInitials,
+            portraitSymbol: persona.portraitSymbol,
+            accentHex: persona.accentHex
         )
         
         let checks = VerificationChecks(
@@ -137,7 +140,8 @@ public final class SimulatorMockProvider {
             checks: checks,
             trust: trust,
             source: .simulatorMock,
-            timestamp: Date()
+            timestamp: Date(),
+            venue: VenueRequest.rooftopLounge
         )
     }
     

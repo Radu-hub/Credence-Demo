@@ -18,6 +18,8 @@ public final class VerificationViewModel: ObservableObject {
     @Published public var uiState: VerificationUIState = .idle
     @Published public var operationMode: OperationMode = .simulatorMock
     @Published public var selectedPersona: SimulatorPersona = SimulatorPersona.johnAppleseed
+    @Published public var activeVenue: VenueRequest = VenueRequest.rooftopLounge
+    @Published public var latestVerifiedResult: IdentityResult? = nil
     @Published public var useBackendVerification: Bool = true
     @Published public var activeSessionId: String = ""
     @Published public var recentResults: [IdentityResult] = []
@@ -37,6 +39,18 @@ public final class VerificationViewModel: ObservableObject {
     public init() {
         self.activeSessionId = UUID().uuidString
         self.backendURL = BackendAPIService.shared.baseURL
+        if CommandLine.arguments.contains("--preview-pass") {
+            var sample = mockProvider.evaluateLocally(persona: selectedPersona)
+            sample.venue = activeVenue
+            self.latestVerifiedResult = sample
+            self.recentResults = [sample]
+        } else if CommandLine.arguments.contains("--preview-minor") {
+            var sample = mockProvider.evaluateLocally(persona: SimulatorPersona.janeDoe)
+            sample.venue = activeVenue
+            self.selectedPersona = SimulatorPersona.janeDoe
+            self.latestVerifiedResult = sample
+            self.recentResults = [sample]
+        }
         Task {
             await checkDeviceCapabilities()
             await backendService.checkHealth()
@@ -107,19 +121,23 @@ public final class VerificationViewModel: ObservableObject {
             
             Task {
                 do {
-                    let result = try await backendService.verifyPresentation(
+                    var result = try await backendService.verifyPresentation(
                         sessionId: activeSessionId,
                         simulatorPayload: mockPayload
                     )
+                    result.venue = activeVenue
+                    self.latestVerifiedResult = result
                     self.uiState = .completed(result)
                     self.recentResults.insert(result, at: 0)
                     triggerHaptic(for: result.decision)
                     self.statusMessage = "Verification complete."
                 } catch {
-                    let localResult = mockProvider.evaluateLocally(
+                    var localResult = mockProvider.evaluateLocally(
                         persona: targetPersona,
                         sessionId: activeSessionId
                     )
+                    localResult.venue = activeVenue
+                    self.latestVerifiedResult = localResult
                     self.uiState = .completed(localResult)
                     self.recentResults.insert(localResult, at: 0)
                     triggerHaptic(for: localResult.decision)
@@ -127,10 +145,12 @@ public final class VerificationViewModel: ObservableObject {
                 }
             }
         } else {
-            let localResult = mockProvider.evaluateLocally(
+            var localResult = mockProvider.evaluateLocally(
                 persona: targetPersona,
                 sessionId: activeSessionId
             )
+            localResult.venue = activeVenue
+            self.latestVerifiedResult = localResult
             self.uiState = .completed(localResult)
             self.recentResults.insert(localResult, at: 0)
             triggerHaptic(for: localResult.decision)
@@ -173,22 +193,28 @@ public final class VerificationViewModel: ObservableObject {
                 
                 if useBackendVerification {
                     do {
-                        let result = try await backendService.verifyPresentation(
+                        var result = try await backendService.verifyPresentation(
                             sessionId: activeSessionId,
                             encryptedData: encryptedData
                         )
+                        result.venue = activeVenue
+                        self.latestVerifiedResult = result
                         self.uiState = .completed(result)
                         self.recentResults.insert(result, at: 0)
                         triggerHaptic(for: result.decision)
                     } catch {
                         // Fallback to local parsing of document
-                        let localResult = localParser.parseAndVerify(data: encryptedData, sessionId: activeSessionId)
+                        var localResult = localParser.parseAndVerify(data: encryptedData, sessionId: activeSessionId)
+                        localResult.venue = activeVenue
+                        self.latestVerifiedResult = localResult
                         self.uiState = .completed(localResult)
                         self.recentResults.insert(localResult, at: 0)
                         triggerHaptic(for: localResult.decision)
                     }
                 } else {
-                    let localResult = localParser.parseAndVerify(data: encryptedData, sessionId: activeSessionId)
+                    var localResult = localParser.parseAndVerify(data: encryptedData, sessionId: activeSessionId)
+                    localResult.venue = activeVenue
+                    self.latestVerifiedResult = localResult
                     self.uiState = .completed(localResult)
                     self.recentResults.insert(localResult, at: 0)
                     triggerHaptic(for: localResult.decision)
