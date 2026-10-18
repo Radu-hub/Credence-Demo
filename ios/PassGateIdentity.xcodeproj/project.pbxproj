@@ -21,6 +21,7 @@
 		1100003B28873C3B0000003B /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002B28873C3B0000002B /* SettingsSheetView.swift */; };
 		1100003C28873C3B0000003C /* VerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002C28873C3B0000002C /* VerificationView.swift */; };
 		1100003D28873C3B0000003D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002D28873C3B0000002D /* ContentView.swift */; };
+		1100003E28873C3B0000003E /* AppleWalletSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002E28873C3B0000002E /* AppleWalletSheetView.swift */; };
 		1100001628873C3B00000016 /* PassKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1100001528873C3B00000015 /* PassKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -39,6 +40,7 @@
 		1100002B28873C3B0000002B /* SettingsSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		1100002C28873C3B0000002C /* VerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationView.swift; sourceTree = "<group>"; };
 		1100002D28873C3B0000002D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1100002E28873C3B0000002E /* AppleWalletSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleWalletSheetView.swift; sourceTree = "<group>"; };
 		1100004028873C3B00000040 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1100004128873C3B00000041 /* PassGateIdentity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PassGateIdentity.entitlements; sourceTree = "<group>"; };
 		1100000D28873C3B0000000D /* PassGateIdentity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PassGateIdentity.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -133,6 +135,7 @@
 				1100002728873C3B00000027 /* PKIdentityButtonView.swift */,
 				1100002828873C3B00000028 /* StatusBadgeView.swift */,
 				1100002928873C3B00000029 /* ClaimRowView.swift */,
+				1100002E28873C3B0000002E /* AppleWalletSheetView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -228,6 +231,7 @@
 				1100003B28873C3B0000003B /* SettingsSheetView.swift in Sources */,
 				1100003C28873C3B0000003C /* VerificationView.swift in Sources */,
 				1100003D28873C3B0000003D /* ContentView.swift in Sources */,
+				1100003E28873C3B0000003E /* AppleWalletSheetView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

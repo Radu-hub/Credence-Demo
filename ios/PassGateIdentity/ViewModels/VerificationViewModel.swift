@@ -84,55 +84,57 @@ public final class VerificationViewModel: ObservableObject {
     
     // MARK: - Simulator Mock Path
     
-    private func performSimulatorMockVerification() {
-        self.uiState = .requestingIdentity
-        self.statusMessage = "Simulating Apple Wallet identity presentation..."
+    public func performSimulatorMockVerification() {
+        executeVerification(for: selectedPersona)
+    }
+    
+    public func executeVerification(for persona: SimulatorPersona? = nil) {
+        if let persona = persona {
+            self.selectedPersona = persona
+        }
+        self.activeSessionId = UUID().uuidString
+        let targetPersona = persona ?? selectedPersona
         
-        // Add brief natural delay mimicking Apple Wallet sheet presentation & biometric scan
-        Task {
-            try? await Task.sleep(nanoseconds: 700_000_000) // 0.7s
+        // If backend is active and enabled, verify via backend; otherwise verify locally with zero latency!
+        if useBackendVerification && backendService.isConnected {
+            self.uiState = .verifyingWithBackend
+            self.statusMessage = "Verifying with PassGate backend..."
             
             let mockPayload = mockProvider.generateMockPayload(
-                for: selectedPersona,
+                for: targetPersona,
                 sessionId: activeSessionId
             )
             
-            if useBackendVerification {
-                self.uiState = .verifyingWithBackend
-                self.statusMessage = "Transmitting to PassGate backend for cryptographic evaluation..."
-                
+            Task {
                 do {
                     let result = try await backendService.verifyPresentation(
                         sessionId: activeSessionId,
                         simulatorPayload: mockPayload
                     )
-                    
                     self.uiState = .completed(result)
                     self.recentResults.insert(result, at: 0)
                     triggerHaptic(for: result.decision)
                     self.statusMessage = "Verification complete."
                 } catch {
-                    // Fallback to local evaluation if backend is offline
-                    print("[VerificationViewModel] Backend failed: \(error.localizedDescription). Falling back to local evaluator.")
                     let localResult = mockProvider.evaluateLocally(
-                        persona: selectedPersona,
+                        persona: targetPersona,
                         sessionId: activeSessionId
                     )
                     self.uiState = .completed(localResult)
                     self.recentResults.insert(localResult, at: 0)
                     triggerHaptic(for: localResult.decision)
-                    self.statusMessage = "Verified locally (Backend offline)."
+                    self.statusMessage = "Verified locally."
                 }
-            } else {
-                let localResult = mockProvider.evaluateLocally(
-                    persona: selectedPersona,
-                    sessionId: activeSessionId
-                )
-                self.uiState = .completed(localResult)
-                self.recentResults.insert(localResult, at: 0)
-                triggerHaptic(for: localResult.decision)
-                self.statusMessage = "Verified locally."
             }
+        } else {
+            let localResult = mockProvider.evaluateLocally(
+                persona: targetPersona,
+                sessionId: activeSessionId
+            )
+            self.uiState = .completed(localResult)
+            self.recentResults.insert(localResult, at: 0)
+            triggerHaptic(for: localResult.decision)
+            self.statusMessage = "Verified locally."
         }
     }
     

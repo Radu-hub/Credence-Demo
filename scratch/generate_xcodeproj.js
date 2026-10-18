@@ -46,6 +46,7 @@ const swiftFiles = [
   { id: '1100002B28873C3B0000002B', buildId: '1100003B28873C3B0000003B', name: 'SettingsSheetView.swift', path: 'PassGateIdentity/Views/SettingsSheetView.swift', group: 'views' },
   { id: '1100002C28873C3B0000002C', buildId: '1100003C28873C3B0000003C', name: 'VerificationView.swift', path: 'PassGateIdentity/Views/VerificationView.swift', group: 'views' },
   { id: '1100002D28873C3B0000002D', buildId: '1100003D28873C3B0000003D', name: 'ContentView.swift', path: 'PassGateIdentity/Views/ContentView.swift', group: 'views' },
+  { id: '1100002E28873C3B0000002E', buildId: '1100003E28873C3B0000003E', name: 'AppleWalletSheetView.swift', path: 'PassGateIdentity/Views/Components/AppleWalletSheetView.swift', group: 'components' },
 ];
 
 const nonCodeFiles = [

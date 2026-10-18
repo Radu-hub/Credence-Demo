@@ -3,6 +3,7 @@ import SwiftUI
 public struct VerificationView: View {
     @ObservedObject var viewModel: VerificationViewModel
     @State private var showingResultDetail: Bool = false
+    @State private var showingWalletSheet: Bool = false
     
     public init(viewModel: VerificationViewModel) {
         self.viewModel = viewModel
@@ -103,38 +104,44 @@ public struct VerificationView: View {
                 }
                 .padding(.horizontal)
                 
-                // MARK: - Active Mode Description
-                if viewModel.operationMode == .simulatorMock {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "person.crop.circle.badge.checkmark")
-                                .foregroundColor(.blue)
-                            Text("Active Simulator Persona:")
-                                .font(.subheadline.bold())
-                            Spacer()
-                            Text(viewModel.selectedPersona.name)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Text("Outcome:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(viewModel.selectedPersona.isOver21 ? "Will Grant (21+)" : "Will Deny (<21)")
-                                .font(.caption.bold())
-                                .foregroundColor(viewModel.selectedPersona.isOver21 ? .green : .red)
-                            Spacer()
-                            Button("Switch") {
-                                viewModel.showingSettings = true
-                            }
+                // MARK: - Active Mode & Persona Selection
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "person.crop.circle.badge.checkmark")
+                            .foregroundColor(.blue)
+                        Text("Select Patron to Verify:")
+                            .font(.subheadline.bold())
+                        Spacer()
+                        Text(viewModel.selectedPersona.isOver21 ? "Legal (21+)" : "Minor (<21)")
                             .font(.caption.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(viewModel.selectedPersona.isOver21 ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
+                            .foregroundColor(viewModel.selectedPersona.isOver21 ? .green : .red)
+                            .cornerRadius(8)
+                    }
+                    
+                    // Quick Persona Segmented Control
+                    Picker("Patron Profile", selection: $viewModel.selectedPersona) {
+                        ForEach(SimulatorPersona.presets) { persona in
+                            Text(persona.givenName).tag(persona)
                         }
                     }
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(14)
-                    .padding(.horizontal)
+                    .pickerStyle(.segmented)
+                    
+                    HStack {
+                        Text(viewModel.selectedPersona.name)
+                            .font(.caption.bold())
+                        Spacer()
+                        Text("DOB: \(viewModel.selectedPersona.birthDate)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(16)
+                .padding(.horizontal)
                 
                 // MARK: - Action Buttons
                 VStack(spacing: 12) {
@@ -142,7 +149,11 @@ public struct VerificationView: View {
                         title: "Verify with Apple Wallet",
                         isLoading: viewModel.uiState.isLoading,
                         action: {
-                            viewModel.verifyWithAppleWallet()
+                            if viewModel.operationMode == .simulatorMock {
+                                showingWalletSheet = true
+                            } else {
+                                viewModel.verifyWithAppleWallet()
+                            }
                         }
                     )
                     
@@ -238,6 +249,21 @@ public struct VerificationView: View {
                     Image(systemName: "gearshape.fill")
                 }
             }
+        }
+        .sheet(isPresented: $showingWalletSheet) {
+            AppleWalletSheetView(
+                persona: viewModel.selectedPersona,
+                onConfirm: {
+                    showingWalletSheet = false
+                    viewModel.executeVerification(for: viewModel.selectedPersona)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        showingResultDetail = true
+                    }
+                },
+                onCancel: {
+                    showingWalletSheet = false
+                }
+            )
         }
         .sheet(isPresented: $showingResultDetail) {
             if case .completed(let result) = viewModel.uiState {
