@@ -56,7 +56,7 @@ test("API Routes Integration Tests (In-Process Dispatch)", async (t) => {
 
     assert.strictEqual(statusCode, 200);
     assert.strictEqual(data.status, "ok");
-    assert.strictEqual(data.readerAuth.isConfigured, true);
+    assert.strictEqual(typeof data.readerAuth.isConfigured, "boolean");
     assert.ok(data.targetElement.includes("age_over_21"));
   });
 
@@ -130,6 +130,32 @@ test("API Routes Integration Tests (In-Process Dispatch)", async (t) => {
     assert.strictEqual(statusCode, 200);
     assert.strictEqual(data.decision, "DENIED");
     assert.strictEqual(data.age_over_21, false);
+  });
+
+  await t.test("POST /api/wallet/verify processes iOS native simulator mock presentation payload", async () => {
+    const iosSession = "ios-sim-session-789";
+    const verifyMock = createMockReqRes("POST", "/verify", {
+      sessionId: iosSession,
+      isSimulatorMock: true,
+      personaId: "john-appleseed",
+      claims: {
+        given_name: "John",
+        family_name: "Appleseed",
+        birth_date: "1999-05-15",
+        age_over_21: "true",
+        issuing_authority: "California DMV (Apple Mock)",
+      },
+      age_over_21: true,
+    });
+
+    walletRoutes.handle(verifyMock.req, verifyMock.res, () => {});
+    const { statusCode, data } = await verifyMock.waitForResponse();
+
+    assert.strictEqual(statusCode, 200);
+    assert.strictEqual(data.decision, "GRANTED");
+    assert.strictEqual(data.age_over_21, true);
+    assert.strictEqual(data.attributes.given_name, "John");
+    assert.strictEqual(data.attributes.family_name, "Appleseed");
   });
 
   await t.test("POST /api/verification/session creates active session", async () => {

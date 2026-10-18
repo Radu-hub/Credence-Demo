@@ -142,14 +142,10 @@ router.post("/auth-options", handleAuthOptions);
  */
 router.post("/verify", async (req, res) => {
   try {
-    const { sessionId, session_id, credential, data, response } = req.body;
-    const targetSessionId = sessionId || session_id || (typeof verificationRouter.getLastActiveSessionId === "function" ? verificationRouter.getLastActiveSessionId() : null);
+    const { sessionId, session_id, credential, data, response, encryptedData } = req.body;
+    const targetSessionId = sessionId || session_id || (typeof verificationRouter.getLastActiveSessionId === "function" ? verificationRouter.getLastActiveSessionId() : null) || uuidv4();
 
-    if (!targetSessionId) {
-      return res.status(400).json({ error: "Missing sessionId in verification request." });
-    }
-
-    const payload = credential || data || response || req.body;
+    const payload = encryptedData || credential || data || response || req.body;
     if (!payload) {
       return res.status(400).json({ error: "No credential presentation payload provided." });
     }
@@ -162,8 +158,16 @@ router.post("/verify", async (req, res) => {
     }
 
     const sessions = getSessionMap();
-    const session = sessions.get(targetSessionId);
-    if (session) {
+    let session = sessions.get(targetSessionId);
+    if (!session) {
+      session = {
+        id: targetSessionId,
+        status: "verifying",
+        protocol: "Apple PassKit (Native iOS)",
+        createdAt: new Date().toISOString(),
+      };
+      sessions.set(targetSessionId, session);
+    } else {
       session.status = "verifying";
       session.updatedAt = new Date().toISOString();
     }

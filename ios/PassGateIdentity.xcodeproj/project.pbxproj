@@ -1,0 +1,376 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1100003028873C3B00000030 /* PassGateIdentityApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002028873C3B00000020 /* PassGateIdentityApp.swift */; };
+		1100003128873C3B00000031 /* VerificationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002128873C3B00000021 /* VerificationModels.swift */; };
+		1100003228873C3B00000032 /* IdentityVerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002228873C3B00000022 /* IdentityVerificationService.swift */; };
+		1100003328873C3B00000033 /* SimulatorMockProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002328873C3B00000023 /* SimulatorMockProvider.swift */; };
+		1100003428873C3B00000034 /* MdocParserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002428873C3B00000024 /* MdocParserService.swift */; };
+		1100003528873C3B00000035 /* BackendAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002528873C3B00000025 /* BackendAPIService.swift */; };
+		1100003628873C3B00000036 /* VerificationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002628873C3B00000026 /* VerificationViewModel.swift */; };
+		1100003728873C3B00000037 /* PKIdentityButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002728873C3B00000027 /* PKIdentityButtonView.swift */; };
+		1100003828873C3B00000038 /* StatusBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002828873C3B00000028 /* StatusBadgeView.swift */; };
+		1100003928873C3B00000039 /* ClaimRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002928873C3B00000029 /* ClaimRowView.swift */; };
+		1100003A28873C3B0000003A /* ResultDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002A28873C3B0000002A /* ResultDetailView.swift */; };
+		1100003B28873C3B0000003B /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002B28873C3B0000002B /* SettingsSheetView.swift */; };
+		1100003C28873C3B0000003C /* VerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002C28873C3B0000002C /* VerificationView.swift */; };
+		1100003D28873C3B0000003D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100002D28873C3B0000002D /* ContentView.swift */; };
+		1100001628873C3B00000016 /* PassKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1100001528873C3B00000015 /* PassKit.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1100002028873C3B00000020 /* PassGateIdentityApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassGateIdentityApp.swift; sourceTree = "<group>"; };
+		1100002128873C3B00000021 /* VerificationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationModels.swift; sourceTree = "<group>"; };
+		1100002228873C3B00000022 /* IdentityVerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityVerificationService.swift; sourceTree = "<group>"; };
+		1100002328873C3B00000023 /* SimulatorMockProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatorMockProvider.swift; sourceTree = "<group>"; };
+		1100002428873C3B00000024 /* MdocParserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MdocParserService.swift; sourceTree = "<group>"; };
+		1100002528873C3B00000025 /* BackendAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAPIService.swift; sourceTree = "<group>"; };
+		1100002628873C3B00000026 /* VerificationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViewModel.swift; sourceTree = "<group>"; };
+		1100002728873C3B00000027 /* PKIdentityButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKIdentityButtonView.swift; sourceTree = "<group>"; };
+		1100002828873C3B00000028 /* StatusBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadgeView.swift; sourceTree = "<group>"; };
+		1100002928873C3B00000029 /* ClaimRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimRowView.swift; sourceTree = "<group>"; };
+		1100002A28873C3B0000002A /* ResultDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultDetailView.swift; sourceTree = "<group>"; };
+		1100002B28873C3B0000002B /* SettingsSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
+		1100002C28873C3B0000002C /* VerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationView.swift; sourceTree = "<group>"; };
+		1100002D28873C3B0000002D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1100004028873C3B00000040 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1100004128873C3B00000041 /* PassGateIdentity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PassGateIdentity.entitlements; sourceTree = "<group>"; };
+		1100000D28873C3B0000000D /* PassGateIdentity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PassGateIdentity.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1100001528873C3B00000015 /* PassKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PassKit.framework; path = System/Library/Frameworks/PassKit.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1100000428873C3B00000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1100001628873C3B00000016 /* PassKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1100000228873C3B00000002 = {
+			isa = PBXGroup;
+			children = (
+				1100000F28873C3B0000000F /* PassGateIdentity */,
+				1100001528873C3B00000015 /* Frameworks */,
+				1100000E28873C3B0000000E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1100000E28873C3B0000000E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1100000D28873C3B0000000D /* PassGateIdentity.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1100000F28873C3B0000000F /* PassGateIdentity */ = {
+			isa = PBXGroup;
+			children = (
+				1100002028873C3B00000020 /* PassGateIdentityApp.swift */,
+				1100001028873C3B00000010 /* Models */,
+				1100001128873C3B00000011 /* Services */,
+				1100001228873C3B00000012 /* ViewModels */,
+				1100001328873C3B00000013 /* Views */,
+				1100004028873C3B00000040 /* Info.plist */,
+				1100004128873C3B00000041 /* PassGateIdentity.entitlements */,
+			);
+			path = PassGateIdentity;
+			sourceTree = "<group>";
+		};
+		1100001028873C3B00000010 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				1100002128873C3B00000021 /* VerificationModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		1100001128873C3B00000011 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				1100002228873C3B00000022 /* IdentityVerificationService.swift */,
+				1100002328873C3B00000023 /* SimulatorMockProvider.swift */,
+				1100002428873C3B00000024 /* MdocParserService.swift */,
+				1100002528873C3B00000025 /* BackendAPIService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		1100001228873C3B00000012 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				1100002628873C3B00000026 /* VerificationViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		1100001328873C3B00000013 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				1100001428873C3B00000014 /* Components */,
+				1100002A28873C3B0000002A /* ResultDetailView.swift */,
+				1100002B28873C3B0000002B /* SettingsSheetView.swift */,
+				1100002C28873C3B0000002C /* VerificationView.swift */,
+				1100002D28873C3B0000002D /* ContentView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		1100001428873C3B00000014 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				1100002728873C3B00000027 /* PKIdentityButtonView.swift */,
+				1100002828873C3B00000028 /* StatusBadgeView.swift */,
+				1100002928873C3B00000029 /* ClaimRowView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1100000628873C3B00000006 /* PassGateIdentity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1100000928873C3B00000009 /* Build configuration list for PBXNativeTarget "PassGateIdentity" */;
+			buildPhases = (
+				1100000328873C3B00000003 /* Sources */,
+				1100000428873C3B00000004 /* Frameworks */,
+				1100000528873C3B00000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PassGateIdentity;
+			productName = PassGateIdentity;
+			productReference = 1100000D28873C3B0000000D /* PassGateIdentity.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1100000128873C3B00000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					1100000628873C3B00000006 = {
+						CreatedOnToolsVersion = 15.0;
+						DevelopmentTeam = "";
+						SystemCapabilities = {
+							com.apple.InAppIdentityPresentation = {
+								enabled = 1;
+							};
+							com.apple.Wallet = {
+								enabled = 1;
+							};
+						};
+					};
+				};
+			};
+			buildConfigurationList = 1100000C28873C3B0000000C /* Build configuration list for PBXProject "PassGateIdentity" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1100000228873C3B00000002;
+			productRefGroup = 1100000E28873C3B0000000E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1100000628873C3B00000006 /* PassGateIdentity */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1100000528873C3B00000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1100000328873C3B00000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1100003028873C3B00000030 /* PassGateIdentityApp.swift in Sources */,
+				1100003128873C3B00000031 /* VerificationModels.swift in Sources */,
+				1100003228873C3B00000032 /* IdentityVerificationService.swift in Sources */,
+				1100003328873C3B00000033 /* SimulatorMockProvider.swift in Sources */,
+				1100003428873C3B00000034 /* MdocParserService.swift in Sources */,
+				1100003528873C3B00000035 /* BackendAPIService.swift in Sources */,
+				1100003628873C3B00000036 /* VerificationViewModel.swift in Sources */,
+				1100003728873C3B00000037 /* PKIdentityButtonView.swift in Sources */,
+				1100003828873C3B00000038 /* StatusBadgeView.swift in Sources */,
+				1100003928873C3B00000039 /* ClaimRowView.swift in Sources */,
+				1100003A28873C3B0000003A /* ResultDetailView.swift in Sources */,
+				1100003B28873C3B0000003B /* SettingsSheetView.swift in Sources */,
+				1100003C28873C3B0000003C /* VerificationView.swift in Sources */,
+				1100003D28873C3B0000003D /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1100000A28873C3B0000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		1100000B28873C3B0000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1100000728873C3B00000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PassGateIdentity/PassGateIdentity.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PassGateIdentity/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.credence.passgate;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1100000828873C3B00000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PassGateIdentity/PassGateIdentity.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PassGateIdentity/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.credence.passgate;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1100000C28873C3B0000000C /* Build configuration list for PBXProject "PassGateIdentity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1100000A28873C3B0000000A /* Debug */,
+				1100000B28873C3B0000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1100000928873C3B00000009 /* Build configuration list for PBXNativeTarget "PassGateIdentity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1100000728873C3B00000007 /* Debug */,
+				1100000828873C3B00000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 1100000128873C3B00000001 /* Project object */;
+}
